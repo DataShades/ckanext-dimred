@@ -19,13 +19,10 @@ from ckanext.dimred.logic import schema
 @tk.blanket.config_declarations
 @tk.blanket.helpers
 @tk.blanket.auth_functions
-class DimredPlugin(
-    p.SingletonPlugin,
-    p.IConfigurable,
-    p.IConfigurer,
-    p.IResourceView,
-):
-    """ckanext-dimred plugin."""
+class DimredPlugin(p.SingletonPlugin):
+    p.implements(p.IConfigurable)
+    p.implements(p.IConfigurer)
+    p.implements(p.IResourceView, inherit=True)
 
     # IConfigurable
 
