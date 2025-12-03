@@ -1,0 +1,79 @@
+version: 1
+
+groups:
+  - annotation: Dimensionality reduction preview
+    options:
+      - key: ckanext.dimred.default_method
+        default: umap
+        type: base
+        description: >
+          Default method used when creating a dimred preview via the
+          "Create with default settings" button.
+
+      - key: ckanext.dimred.allowed_methods
+        default: umap tsne
+        type: list
+        description: >
+          Space-separated list of enabled methods for dimred previews.
+
+      - key: ckanext.dimred.max_file_size_mb
+        default: 50
+        type: int
+        description: >
+          Maximum resource file size (in megabytes) for which a dimred
+          preview will be attempted.
+
+      - key: ckanext.dimred.max_rows
+        default: 50000
+        type: int
+        description: >
+          Maximum number of rows to load from the resource when building
+          the dimred preview.
+
+      - key: ckanext.dimred.enable_categorical
+        default: true
+        type: bool
+        description: >
+          Whether to include low-cardinality categorical columns using
+          one-hot encoding.
+
+      - key: ckanext.dimred.max_categories_for_ohe
+        default: 30
+        type: int
+        description: >
+          Maximum number of distinct values in a categorical column to be
+          included via one-hot encoding.
+
+  - annotation: UMAP defaults
+    options:
+      - key: ckanext.dimred.umap.n_neighbors
+        default: 15
+        type: int
+        description: >
+          Default number of neighbors for UMAP.
+
+      - key: ckanext.dimred.umap.min_dist
+        default: 0.1
+        type: base
+        description: >
+          Default UMAP min_dist value. Parsed as float in the extension code.
+
+      - key: ckanext.dimred.umap.n_components
+        default: 2
+        type: int
+        description: >
+          Number of output components for UMAP.
+
+  - annotation: t-SNE defaults
+    options:
+      - key: ckanext.dimred.tsne.perplexity
+        default: 30
+        type: int
+        description: >
+          Default t-SNE perplexity.
+
+      - key: ckanext.dimred.tsne.n_components
+        default: 2
+        type: int
+        description: >
+          Number of output components for t-SNE.

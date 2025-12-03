@@ -1,0 +1,60 @@
+{% extends "dataviewer/base.html" %}
+
+{% block styles %}
+  {{ super() }}
+  {% asset 'dimred/dimred-css' %}
+{% endblock %}
+
+{% block page %}
+    <div class="dimred-view page">
+        <div class="module">
+            <h3 class="module-heading">
+                {{ resource_view.title or _('Dimensionality reduction') }}
+            </h3>
+
+            <div class="module-content dimred-container">
+                {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% elif image_data_url %}
+                    <img
+                            src="{{ image_data_url }}"
+                            alt="{{ _('Dimensionality reduction plot') }}"
+                            class="dimred-plot"
+                    />
+                {% else %}
+                    <p>{{ _('No embedding image available.') }}</p>
+                {% endif %}
+
+                {% if meta.prepare_info %}
+                    {% set info = meta.prepare_info %}
+                    <div class="dimred-meta">
+                        <ul>
+                            {% if meta.method %}
+                                <li><strong>Method:</strong> {{ meta.method }}</li>
+                            {% endif %}
+                            <li><strong>Rows used:</strong> {{ info.n_rows_used }}
+                                (original: {{ info.n_rows_original }})
+                            </li>
+                            <li><strong>Features:</strong> {{ info.n_features }}</li>
+                            {% if info.numeric_used %}
+                                <li><strong>Numeric columns:</strong> {{ ',
+                        '.join(info.numeric_used) }}
+                                </li>
+                            {% endif %}
+                            {% if info.categorical_used %}
+                                <li><strong>Categorical columns:</strong> {{ ',
+                        '.join(info.categorical_used) }}
+                                </li>
+                            {% endif %}
+                            {% if info.color_by %}
+                                <li><strong>Color by:</strong> {{ info.color_by }}</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% asset 'dimred/dimred-css' %}

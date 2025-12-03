@@ -1,0 +1,32 @@
+.dimred-feature-label::after {
+    content: "" !important;
+}
+
+#feature-columns-list .checkbox {
+    margin: 4px 0;
+}
+
+.dimred-container {
+    max-width: unset;
+}
+
+.dimred-plot {
+    display: block;
+    margin: 0 auto 1em;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #ddd;
+    background: #fff;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.08);
+}
+
+.dimred-meta {
+    font-size: 0.9em;
+    color: #444;
+}
+
+.dimred-meta ul {
+    list-style: disc;
+    padding-left: 1.5em;
+    margin: 0;
+}

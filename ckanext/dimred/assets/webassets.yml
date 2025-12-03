@@ -1,0 +1,14 @@
+dimred-js:
+  filter: rjsmin
+  output: ckanext-dimred/%(version)s-dimred.js
+  contents:
+    - js/dimred-view-form.js
+  extra:
+    preload:
+      - base/main
+
+dimred-css:
+  filter: cssrewrite
+  output: ckanext-dimred/%(version)s-dimred.css
+  contents:
+    - css/dimred.css
