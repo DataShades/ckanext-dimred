@@ -31,14 +31,14 @@
                             <p>{{ _('No embedding image available.') }}</p>
                         {% endif %}
 
-                        {% if meta.prepare_info %}
-                            {% set info = meta.prepare_info %}
-                            {% block dimred_meta %}
+                        {% block dimred_meta %}
+                            {% set info = meta.prepare_info or {} %}
+                            {% if info %}
                                 <div class="dimred-meta">
                                     <ul>
                                         {% if meta.method %}
                                             <li>
-                                                <strong>{{ _('Method') }}:</strong> {{ meta.method }}
+                                                <strong>{{ _('Method') }}:</strong> {{ h.dimred_method_label(meta.method) }}
                                             </li>
                                         {% endif %}
                                         <li>
@@ -68,8 +68,8 @@
                                         {% endif %}
                                     </ul>
                                 </div>
-                            {% endblock %}
-                        {% endif %}
+                            {% endif %}
+                        {% endblock %}
 
                         {% block dimred_actions %}
                             {% if resource_view.id and h.dimred_export_enabled() %}

@@ -21,8 +21,13 @@ def dimred_default_method() -> str:
 
 
 def dimred_allowed_methods_options() -> list[dict[str, str]]:
-    """Return method options formatted for form.select macro."""
-    return [{"value": m, "text": m} for m in dimred_config.allowed_methods()]
+    """Return method options formatted for form.select macro with friendly labels."""
+    labels = dimred_method_labels()
+    options = []
+    for m in dimred_config.allowed_methods():
+        text = labels.get(m, m)
+        options.append({"value": m, "text": text})
+    return options
 
 
 def dimred_color_options(fields: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -95,3 +100,21 @@ def dimred_methods_defaults() -> dict[str, dict[str, Any]]:
     for name in dimred_config.allowed_methods():
         defaults[name] = dimred_method_default_params(name)
     return defaults
+
+
+def dimred_method_labels() -> dict[str, str]:
+    """Return mapping of method names to display labels."""
+    base = {
+        "umap": "UMAP",
+        "tsne": "t-SNE",
+        "pca": "PCA",
+    }
+    extra = getattr(dimred_config, "method_labels", lambda: {})()
+    if isinstance(extra, dict):
+        base.update({str(k): str(v) for k, v in extra.items()})
+    return base
+
+
+def dimred_method_label(method: str) -> str:
+    """Return a friendly label for a method name."""
+    return dimred_method_labels().get(method, method)
