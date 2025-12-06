@@ -21,6 +21,7 @@ from ckanext.dimred.utils import cache as dimred_cache
 @tk.blanket.helpers
 @tk.blanket.auth_functions
 @tk.blanket.validators
+@tk.blanket.blueprints
 class DimredPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurable)
     p.implements(p.IConfigurer)

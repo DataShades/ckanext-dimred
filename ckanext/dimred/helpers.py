@@ -74,6 +74,11 @@ def dimred_feature_options_from_resource(
     return options
 
 
+def dimred_export_enabled() -> bool:
+    """Check whether export button/endpoint is enabled."""
+    return dimred_config.export_enabled()
+
+
 def dimred_method_default_params(method_name: str) -> dict[str, Any]:
     """Return default params for a given dimred method."""
     try:

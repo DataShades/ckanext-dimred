@@ -44,6 +44,12 @@ groups:
           Maximum number of distinct values in a categorical column to be
           included via one-hot encoding.
 
+      - key: ckanext.dimred.export_enabled
+        default: true
+        type: bool
+        description: >
+          Enable the "Download embedding (CSV)" export button and endpoint.
+
   - annotation: Caching
     options:
       - key: ckanext.dimred.cache_enabled

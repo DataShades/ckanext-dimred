@@ -33,7 +33,8 @@ color points by a chosen column and control which columns are used as features.
 2. Create a new resource view of type `dimred_view`.
 3. (Optional) Choose method (`umap`/`tsne`/`pca`), pick `Color by column`, and select feature
    columns.
-4. Save or Preview to see the rendered embedding (PNG).
+4. Save or Preview to see the rendered embedding (PNG), and use “Download embedding (CSV)”
+   to get the coordinates.
 
 API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
 embedding/meta.
@@ -104,6 +105,7 @@ General defaults:
 - `ckanext.dimred.max_rows` (default: `50000`)
 - `ckanext.dimred.enable_categorical` (default: `true`)
 - `ckanext.dimred.max_categories_for_ohe` (default: `30`)
+- `ckanext.dimred.export_enabled` (default: `true`)
 - `ckanext.dimred.cache_enabled` (default: `true`)
 - `ckanext.dimred.cache_ttl` (default: `3600`)
 

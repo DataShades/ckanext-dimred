@@ -21,6 +21,7 @@ from ckanext.dimred.exception import (
 from ckanext.dimred.logic import schema
 from ckanext.dimred.methods import BaseProjectionMethod, get_projection_method
 from ckanext.dimred.utils import cache as dimred_cache
+from ckanext.dimred.utils.export import embedding_to_csv
 
 
 @side_effect_free
@@ -82,6 +83,29 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
     cache.save(resource_id, resource_view_id, settings_sig, result)
 
     return result
+
+
+@side_effect_free
+@validate(schema.dimred_export_embedding_schema)
+def dimred_export_embedding(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
+    """Return CSV export for a dimred preview."""
+    if not dimred_config.export_enabled():
+        raise tk.ValidationError({"export": ["Dimred export is disabled."]})
+
+    result = tk.get_action("dimred_get_dimred_preview")(context, data_dict)
+    if not result or "embedding" not in result:
+        raise DimredFeatureError
+
+    csv_content = embedding_to_csv(result["embedding"], result["meta"])
+    resource_id = data_dict["id"]
+    view_id = data_dict["view_id"]
+    filename = f"dimred-{resource_id}-{view_id}.csv"
+
+    return {
+        "filename": filename,
+        "content": csv_content,
+        "content_type": "text/csv; charset=utf-8",
+    }
 
 
 def _build_dimred_preview(

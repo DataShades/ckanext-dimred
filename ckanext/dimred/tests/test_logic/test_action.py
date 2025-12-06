@@ -13,8 +13,9 @@ from ckanext.dimred.exception import (
     DimredNumericColumnError,
     DimredResourceSizeError,
 )
+from ckanext.dimred.logic import action as dimred_action
 
-IRIS_CSV = pathlib.Path(__file__).parent / "data" / "iris.csv"
+IRIS_CSV = pathlib.Path(__file__).resolve().parent.parent / "data" / "iris.csv"
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -186,3 +187,42 @@ def test_dimred_pipeline_disallowed_method(package, create_with_upload):
         )
 
     assert "Method 'abc' is not allowed." in excinfo.value.error_dict["method"][0]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_export_embedding(package, create_with_upload):
+    with open(IRIS_CSV, "rb") as csv:
+        resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="pca",
+    )
+
+    result = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
+
+    assert result["filename"].endswith(".csv")
+    assert "dim_1" in result["content"]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.export_enabled", "false")
+def test_dimred_export_disabled(package, create_with_upload):
+    with open(IRIS_CSV, "rb") as csv:
+        resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="umap",
+    )
+
+    with pytest.raises(tk.ValidationError):
+        dimred_action.dimred_export_embedding({}, {"id": resource["id"], "view_id": view["id"]})

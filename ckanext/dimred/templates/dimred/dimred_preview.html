@@ -62,6 +62,12 @@
                         </ul>
                     </div>
                 {% endif %}
+                {% if resource_view.id and h.dimred_export_enabled() %}
+                    <a class="btn btn-primary mt-3"
+                       href="{{ h.url_for('dimred.export_embedding', resource_id=resource.id, view_id=resource_view.id) }}">
+                        {{ _('Download embedding (CSV)') }}
+                    </a>
+                {% endif %}
             </div>
         </div>
     </div>

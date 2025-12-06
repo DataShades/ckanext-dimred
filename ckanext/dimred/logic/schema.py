@@ -29,3 +29,15 @@ def dimred_form_schema(
         "color_by": [ignore_empty, unicode_safe],
         "method_params": [ignore_empty, dimred_method_params_object],
     }
+
+
+@validator_args
+def dimred_export_embedding_schema(
+    not_empty: types.Validator,
+    unicode_safe: types.Validator,
+) -> types.Schema:
+    """Validation schema for exporting embedding."""
+    return {
+        "id": [not_empty, unicode_safe],
+        "view_id": [not_empty, unicode_safe],
+    }
