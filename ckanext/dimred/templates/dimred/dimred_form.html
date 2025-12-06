@@ -23,6 +23,9 @@
 {% set default_params = h.dimred_method_default_params(method_for_defaults) %}
 {% set defaults_map = h.dimred_methods_defaults() %}
 {% set params_value = data.get('method_params', resource_view.method_params) if resource_view else data.get('method_params') %}
+{% if params_value is mapping %}
+    {% set params_value = h.dump_json(params_value, indent=2) %}
+{% endif %}
 {% if not params_value %}
     {% set params_value = h.dump_json(default_params) %}
 {% endif %}

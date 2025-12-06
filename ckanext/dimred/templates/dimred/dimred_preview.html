@@ -7,68 +7,81 @@
 
 {% block page %}
     <div class="dimred-view page">
-        <div class="module">
-            <h3 class="module-heading">
-                {{ resource_view.title or _('Dimensionality reduction') }}
-            </h3>
+        {% block dimred_wrapper %}
+            <div class="module">
+                {% block dimred_header %}
+                    <h3 class="module-heading">
+                        {{ resource_view.title or _('Dimensionality reduction') }}
+                    </h3>
+                {% endblock %}
 
-            <div class="module-content dimred-container">
-                {% if error %}
-                    <div class="alert alert-danger">{{ error }}</div>
-                {% elif image_data_url %}
-                    <img
-                            src="{{ image_data_url }}"
-                            alt="{{ _('Dimensionality reduction plot') }}"
-                            class="dimred-plot"
-                    />
-                {% else %}
-                    <p>{{ _('No embedding image available.') }}</p>
-                {% endif %}
+                <div class="module-content dimred-container">
+                    {% block dimred_body %}
+                        {% if error %}
+                            <div class="alert alert-danger">{{ error }}</div>
+                        {% elif image_data_url %}
+                            {% block dimred_image %}
+                                <img
+                                        src="{{ image_data_url }}"
+                                        alt="{{ _('Dimensionality reduction plot') }}"
+                                        class="dimred-plot"
+                                />
+                            {% endblock %}
+                        {% else %}
+                            <p>{{ _('No embedding image available.') }}</p>
+                        {% endif %}
 
-                {% if meta.prepare_info %}
-                    {% set info = meta.prepare_info %}
-                    <div class="dimred-meta">
-                        <ul>
-                            {% if meta.method %}
-                                <li>
-                                    <strong>{{ _('Method') }}:</strong> {{ meta.method }}
-                                </li>
+                        {% if meta.prepare_info %}
+                            {% set info = meta.prepare_info %}
+                            {% block dimred_meta %}
+                                <div class="dimred-meta">
+                                    <ul>
+                                        {% if meta.method %}
+                                            <li>
+                                                <strong>{{ _('Method') }}:</strong> {{ meta.method }}
+                                            </li>
+                                        {% endif %}
+                                        <li>
+                                            <strong>{{ _('Rows used') }}:</strong>
+                                            {{ info.n_rows_used }}
+                                            ({{ _('original') }}: {{ info.n_rows_original }})
+                                        </li>
+                                        <li>
+                                            <strong>{{ _('Features') }}:</strong> {{ info.n_features }}
+                                        </li>
+                                        {% if info.numeric_used %}
+                                            <li>
+                                                <strong>{{ _('Numeric columns') }}:</strong>
+                                                {{ ', '.join(info.numeric_used) }}
+                                            </li>
+                                        {% endif %}
+                                        {% if info.categorical_used %}
+                                            <li>
+                                                <strong>{{ _('Categorical columns') }}:</strong>
+                                                {{ ', '.join(info.categorical_used) }}
+                                            </li>
+                                        {% endif %}
+                                        {% if info.color_by %}
+                                            <li>
+                                                <strong>{{ _('Color by') }}:</strong> {{ info.color_by }}
+                                            </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                            {% endblock %}
+                        {% endif %}
+
+                        {% block dimred_actions %}
+                            {% if resource_view.id and h.dimred_export_enabled() %}
+                                <a class="btn btn-primary mt-3"
+                                   href="{{ h.url_for('dimred.export_embedding', resource_id=resource.id, view_id=resource_view.id) }}">
+                                    {{ _('Download embedding (CSV)') }}
+                                </a>
                             {% endif %}
-                            <li>
-                                <strong>{{ _('Rows used') }}:</strong>
-                                {{ info.n_rows_used }}
-                                ({{ _('original') }}: {{ info.n_rows_original }})
-                            </li>
-                            <li>
-                                <strong>{{ _('Features') }}:</strong> {{ info.n_features }}
-                            </li>
-                            {% if info.numeric_used %}
-                                <li>
-                                    <strong>{{ _('Numeric columns') }}:</strong>
-                                    {{ ', '.join(info.numeric_used) }}
-                                </li>
-                            {% endif %}
-                            {% if info.categorical_used %}
-                                <li>
-                                    <strong>{{ _('Categorical columns') }}:</strong>
-                                    {{ ', '.join(info.categorical_used) }}
-                                </li>
-                            {% endif %}
-                            {% if info.color_by %}
-                                <li>
-                                    <strong>{{ _('Color by') }}:</strong> {{ info.color_by }}
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                {% endif %}
-                {% if resource_view.id and h.dimred_export_enabled() %}
-                    <a class="btn btn-primary mt-3"
-                       href="{{ h.url_for('dimred.export_embedding', resource_id=resource.id, view_id=resource_view.id) }}">
-                        {{ _('Download embedding (CSV)') }}
-                    </a>
-                {% endif %}
+                        {% endblock %}
+                    {% endblock %}
+                </div>
             </div>
-        </div>
+        {% endblock %}
     </div>
 {% endblock %}
