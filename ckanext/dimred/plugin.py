@@ -66,6 +66,16 @@ class DimredPlugin(p.SingletonPlugin):
         resource = data_dict["resource"]
         resource_view = data_dict["resource_view"]
 
+        if not resource_view.get("id"):
+            return {
+                "image_data_url": None,
+                "meta": {},
+                "error": None,
+                "resource": resource,
+                "resource_view": resource_view,
+                "package": data_dict.get("package", {}),
+            }
+
         try:
             result = tk.get_action("dimred_get_dimred_preview")(
                 context,

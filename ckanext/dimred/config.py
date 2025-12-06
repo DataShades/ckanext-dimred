@@ -10,7 +10,8 @@ MAX_ROWS = "ckanext.dimred.max_rows"
 
 ENABLE_CATEGORICAL = "ckanext.dimred.enable_categorical"
 MAX_CATEGORIES_FOR_OHE = "ckanext.dimred.max_categories_for_ohe"
-
+CACHE_ENABLED = "ckanext.dimred.cache_enabled"
+CACHE_TTL = "ckanext.dimred.cache_ttl"
 UMAP_N_NEIGHBORS = "ckanext.dimred.umap.n_neighbors"
 UMAP_MIN_DIST = "ckanext.dimred.umap.min_dist"
 UMAP_N_COMPONENTS = "ckanext.dimred.umap.n_components"
@@ -18,8 +19,8 @@ UMAP_N_COMPONENTS = "ckanext.dimred.umap.n_components"
 TSNE_PERPLEXITY = "ckanext.dimred.tsne.perplexity"
 TSNE_N_COMPONENTS = "ckanext.dimred.tsne.n_components"
 
-CACHE_ENABLED = "ckanext.dimred.cache_enabled"
-CACHE_TTL = "ckanext.dimred.cache_ttl"
+PCA_N_COMPONENTS = "ckanext.dimred.pca.n_components"
+PCA_WHITEN = "ckanext.dimred.pca.whiten"
 
 
 def default_method() -> str:
@@ -56,6 +57,16 @@ def max_categories_for_ohe() -> int:
     return int(tk.config[MAX_CATEGORIES_FOR_OHE])
 
 
+def cache_enabled() -> bool:
+    """Whether caching for dimred previews is enabled."""
+    return tk.asbool(tk.config.get(CACHE_ENABLED, True))
+
+
+def cache_ttl() -> int:
+    """TTL for cached dimred previews in seconds."""
+    return int(tk.config.get(CACHE_TTL, 3600))
+
+
 def umap_n_neighbors() -> int:
     """Default UMAP n_neighbors value."""
     return int(tk.config[UMAP_N_NEIGHBORS])
@@ -82,11 +93,11 @@ def tsne_n_components() -> int:
     return tk.config[TSNE_N_COMPONENTS]
 
 
-def cache_enabled() -> bool:
-    """Whether caching for dimred previews is enabled."""
-    return tk.asbool(tk.config.get(CACHE_ENABLED, True))
+def pca_n_components() -> int:
+    """Number of output components for PCA."""
+    return int(tk.config[PCA_N_COMPONENTS])
 
 
-def cache_ttl() -> int:
-    """TTL for cached dimred previews in seconds."""
-    return int(tk.config.get(CACHE_TTL, 3600))
+def pca_whiten() -> bool:
+    """Whether to whiten PCA output."""
+    return tk.asbool(tk.config.get(PCA_WHITEN, False))

@@ -11,7 +11,7 @@ groups:
           "Create with default settings" button.
 
       - key: ckanext.dimred.allowed_methods
-        default: umap tsne
+        default: umap tsne pca
         type: list
         description: >
           Space-separated list of enabled methods for dimred previews.
@@ -91,3 +91,17 @@ groups:
         type: int
         description: >
           Number of output components for t-SNE.
+
+  - annotation: PCA defaults
+    options:
+      - key: ckanext.dimred.pca.n_components
+        default: 2
+        type: int
+        description: >
+          Number of output components for PCA.
+
+      - key: ckanext.dimred.pca.whiten
+        default: false
+        type: bool
+        description: >
+          Whether to apply whitening to PCA output.

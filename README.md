@@ -17,7 +17,8 @@ color points by a chosen column and control which columns are used as features.
 - Feature prep: numeric columns included; low-cardinality categoricals one-hot encoded
   if enabled; user can pick feature columns.
 - Dimensionality reduction: choose [UMAP](https://umap-learn.readthedocs.io/)
-  or [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html),
+  or [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
+  or [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html),
   with configurable defaults and per-view JSON overrides.
 - Rendering: embedding plotted to PNG.
 - API: `dimred_get_dimred_preview` returns the embedding and metadata
@@ -30,7 +31,7 @@ color points by a chosen column and control which columns are used as features.
 
 1. Add a tabular resource (csv/tsv/xls/xlsx).
 2. Create a new resource view of type `dimred_view`.
-3. (Optional) Choose method (`umap`/`tsne`), pick `Color by column`, and select feature
+3. (Optional) Choose method (`umap`/`tsne`/`pca`), pick `Color by column`, and select feature
    columns.
 4. Save or Preview to see the rendered embedding (PNG).
 
@@ -98,7 +99,7 @@ To install ckanext-dimred:
 General defaults:
 
 - `ckanext.dimred.default_method` (default: `umap`)
-- `ckanext.dimred.allowed_methods` (default: `umap tsne`)
+- `ckanext.dimred.allowed_methods` (default: `umap tsne pca`)
 - `ckanext.dimred.max_file_size_mb` (default: `50`)
 - `ckanext.dimred.max_rows` (default: `50000`)
 - `ckanext.dimred.enable_categorical` (default: `true`)
@@ -116,6 +117,11 @@ t-SNE defaults:
 
 - `ckanext.dimred.tsne.perplexity` (default: `30`)
 - `ckanext.dimred.tsne.n_components` (default: `2`)
+
+PCA defaults:
+
+- `ckanext.dimred.pca.n_components` (default: `2`)
+- `ckanext.dimred.pca.whiten` (default: `false`)
 
 Example:
 

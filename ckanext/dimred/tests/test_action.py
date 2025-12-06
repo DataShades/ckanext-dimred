@@ -42,6 +42,25 @@ def test_dimred_get_dimred_preview_runs_pipeline(package, create_with_upload):
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_get_dimred_preview_pca(package, create_with_upload):
+    with open(IRIS_CSV, "rb") as csv:
+        resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="pca",
+    )
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert result["meta"]["method"] == "pca"
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
 def test_dimred_get_dimred_preview_color_and_features(package, create_with_upload):
     with open(IRIS_CSV, "rb") as csv:
         resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
