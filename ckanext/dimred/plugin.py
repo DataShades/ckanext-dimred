@@ -13,6 +13,7 @@ from ckanext.dimred import utils as dimred_utils
 from ckanext.dimred.adapters import adapter_registry
 from ckanext.dimred.exception import DimredError, DimredPreviewError
 from ckanext.dimred.logic import schema
+from ckanext.dimred.utils import cache as dimred_cache
 
 
 @tk.blanket.actions
@@ -24,6 +25,7 @@ class DimredPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurable)
     p.implements(p.IConfigurer)
     p.implements(p.IResourceView, inherit=True)
+    p.implements(p.IResourceController, inherit=True)
 
     # IConfigurable
 
@@ -98,6 +100,17 @@ class DimredPlugin(p.SingletonPlugin):
     def form_template(self, context: types.Context, data_dict: types.DataDict) -> str:
         return "dimred/dimred_form.html"
 
+    # IResourceController
+
+    def before_resource_update(self, context: types.Context, current: dict[str, Any], resource: dict[str, Any]):
+        if _resource_data_changed(current, resource):
+            cache = dimred_cache.get_cache()
+            cache.delete_for_resource(current["id"])
+
+    def before_resource_delete(self, context: types.Context, resource: dict[str, Any]):
+        cache = dimred_cache.get_cache()
+        cache.delete_for_resource(resource["id"])
+
 
 def _raise_if_error(result: dict[str, Any] | None) -> None:
     """Normalize and raise error from dimred_get_dimred_preview result."""
@@ -105,3 +118,14 @@ def _raise_if_error(result: dict[str, Any] | None) -> None:
         raise DimredPreviewError
     if result.get("error"):
         raise DimredPreviewError(str(result["error"]))
+
+
+def _resource_data_changed(current: dict[str, Any] | None, resource: dict[str, Any]) -> bool:
+    """Return True if the resource file/URL changed (not just metadata)."""
+    if resource.get("upload") or resource.get("upload_file"):
+        return True
+    current_url = (current or {}).get("url")
+    new_url = resource.get("url")
+    if new_url is None and current_url is None:
+        return False
+    return new_url != current_url

@@ -20,6 +20,7 @@ from ckanext.dimred.exception import (
 )
 from ckanext.dimred.logic import schema
 from ckanext.dimred.methods import BaseProjectionMethod, get_projection_method
+from ckanext.dimred.utils import cache as dimred_cache
 
 
 @side_effect_free
@@ -59,10 +60,28 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
     if resource_view is None:
         resource_view = tk.get_action("resource_view_show")(context, {"id": data_dict["view_id"]})
 
+    resource_id = resource["id"]
+    resource_view_id = resource_view["id"]
+
+    method_params = _parse_method_params(resource_view.get("method_params"))
+    resource_view = dict(resource_view)
+    resource_view["method_params"] = method_params
+
+    settings = _cache_settings(resource_view)
+    cache = dimred_cache.get_cache()
+    settings_sig = cache.settings_signature(settings)
+
+    cached = cache.get(resource_id, resource_view_id, settings_sig)
+    if cached:
+        return cached
+
     embedding, meta = _build_dimred_preview(resource, resource_view)
     embedding_serializable = embedding.tolist() if hasattr(embedding, "tolist") else embedding
 
-    return {"embedding": embedding_serializable, "meta": meta}
+    result = {"embedding": embedding_serializable, "meta": meta}
+    cache.save(resource_id, resource_view_id, settings_sig, result)
+
+    return result
 
 
 def _build_dimred_preview(
@@ -92,6 +111,20 @@ def _build_dimred_preview(
     }
 
     return embedding, meta
+
+
+def _cache_settings(resource_view: dict[str, Any]) -> dict[str, Any]:
+    """Build settings dict that affects cache identity."""
+    method_name = (resource_view.get("method") or "").strip() or dimred_config.default_method()
+    return {
+        "method": method_name,
+        "method_params": resource_view.get("method_params"),
+        "feature_columns": resource_view.get("feature_columns"),
+        "color_by": resource_view.get("color_by"),
+        "max_rows": dimred_config.max_rows(),
+        "enable_categorical": dimred_config.enable_categorical(),
+        "max_categories_for_ohe": dimred_config.max_categories_for_ohe(),
+    }
 
 
 def _parse_method_params(raw_params: str | dict[str, Any] | None) -> dict[str, Any]:

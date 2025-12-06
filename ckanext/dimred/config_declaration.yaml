@@ -44,6 +44,20 @@ groups:
           Maximum number of distinct values in a categorical column to be
           included via one-hot encoding.
 
+  - annotation: Caching
+    options:
+      - key: ckanext.dimred.cache_enabled
+        default: true
+        type: bool
+        description: >
+          Enable caching of dimred preview results in Redis.
+
+      - key: ckanext.dimred.cache_ttl
+        default: 3600
+        type: int
+        description: >
+          Time-to-live for cached dimred preview results (seconds).
+
   - annotation: UMAP defaults
     options:
       - key: ckanext.dimred.umap.n_neighbors

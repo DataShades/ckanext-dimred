@@ -18,6 +18,9 @@ UMAP_N_COMPONENTS = "ckanext.dimred.umap.n_components"
 TSNE_PERPLEXITY = "ckanext.dimred.tsne.perplexity"
 TSNE_N_COMPONENTS = "ckanext.dimred.tsne.n_components"
 
+CACHE_ENABLED = "ckanext.dimred.cache_enabled"
+CACHE_TTL = "ckanext.dimred.cache_ttl"
+
 
 def default_method() -> str:
     """Default dimensionality reduction method (e.g. 'umap')."""
@@ -77,3 +80,13 @@ def tsne_perplexity() -> int:
 def tsne_n_components() -> int:
     """Number of output components for t-SNE."""
     return tk.config[TSNE_N_COMPONENTS]
+
+
+def cache_enabled() -> bool:
+    """Whether caching for dimred previews is enabled."""
+    return tk.asbool(tk.config.get(CACHE_ENABLED, True))
+
+
+def cache_ttl() -> int:
+    """TTL for cached dimred previews in seconds."""
+    return int(tk.config.get(CACHE_TTL, 3600))

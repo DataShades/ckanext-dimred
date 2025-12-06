@@ -13,7 +13,6 @@ class BaseProjectionMethod(ABC):
     - __init__ merges defaults with the parameters passed from the caller.
     """
 
-    #: Unique method name (e.g. "umap", "tsne", "pca").
     name: str = "base"
 
     def __init__(self, **params: Any) -> None:

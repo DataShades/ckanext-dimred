@@ -8,7 +8,7 @@ view that:
 Create the view, select a method, and generate a 2D projection of your data. You can
 color points by a chosen column and control which columns are used as features.
 
-![t-SNE embedding PNG](doc/example_umap_preview.png)
+![UMAP embedding PNG](doc/example_umap_preview.png)
 
 ## How it works
 
@@ -20,8 +20,11 @@ color points by a chosen column and control which columns are used as features.
   or [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html),
   with configurable defaults and per-view JSON overrides.
 - Rendering: embedding plotted to PNG.
-- API: `dimred_get_dimred_preview` returns embedding + meta (prep info, method params)
-  for programmatic use.
+- API: `dimred_get_dimred_preview` returns the embedding and metadata
+  (prep info, method params) for programmatic use.
+- Caching: results are cached in Redis by default so repeat calls with
+  the same settings avoid recomputing the projection (configurable TTL
+  and on/off toggle).
 
 ## Usage
 
@@ -100,6 +103,8 @@ General defaults:
 - `ckanext.dimred.max_rows` (default: `50000`)
 - `ckanext.dimred.enable_categorical` (default: `true`)
 - `ckanext.dimred.max_categories_for_ohe` (default: `30`)
+- `ckanext.dimred.cache_enabled` (default: `true`)
+- `ckanext.dimred.cache_ttl` (default: `3600`)
 
 UMAP defaults:
 
