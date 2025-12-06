@@ -8,12 +8,7 @@ view that:
 Create the view, select a method, and generate a 2D projection of your data. You can
 color points by a chosen column and control which columns are used as features.
 
-![t-SNE embedding PNG](https://raw.githubusercontent.com/DataShades/ckanext-dimred/master/doc/example_tsne_preview.png)
-
-## Requirements
-
-- CKAN >= 2.11
-- Python >= 3.10
+![t-SNE embedding PNG](doc/example_tsne_preview.png)
 
 ## How it works
 
@@ -27,6 +22,51 @@ color points by a chosen column and control which columns are used as features.
 - Rendering: embedding plotted to PNG.
 - API: `dimred_get_dimred_preview` returns embedding + meta (prep info, method params)
   for programmatic use.
+
+## Usage
+
+1. Add a tabular resource (csv/tsv/xls/xlsx).
+2. Create a new resource view of type `dimred_view`.
+3. (Optional) Choose method (`umap`/`tsne`), pick `Color by column`, and select feature
+   columns.
+4. Save or Preview to see the rendered embedding (PNG).
+
+API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
+embedding/meta.
+
+## Example
+
+Iris dataset:
+
+| rownames | Sepal.Length | Sepal.Width | Petal.Length | Petal.Width | Species    |
+|----------|--------------|-------------|--------------|-------------|------------|
+| 1        | 5.1          | 3.5         | 1.4          | 0.2         | setosa     |
+| 2        | 4.9          | 3.0         | 1.4          | 0.2         | setosa     |
+| ...      | ...          | ...         | ...          | ...         | ...        |
+| 51       | 7.0          | 3.2         | 4.7          | 1.4         | versicolor |
+| 52       | 6.4          | 3.2         | 4.5          | 1.5         | versicolor |
+| ...      | ...          | ...         | ...          | ...         | ...        |
+| 101      | 6.3          | 3.3         | 6.0          | 2.5         | virginica  |
+| 102      | 5.8          | 2.7         | 5.1          | 1.9         | virginica  |
+| ...      | ...          | ...         | ...          | ...         | ...        |
+
+
+Creating the dimred view: Method, Feature selection, Color by:
+
+![Creating the dimred view](doc/example_form.png)
+
+Rendered 2D embedding PNG:
+
+![Rendered 2D embedding PNG](doc/example_umap_preview.png)
+
+## Requirements
+
+Compatibility with core CKAN versions:
+
+| CKAN version    | Compatible?   |
+| --------------- | ------------- |
+| 2.9 and earlier | no            |
+| 2.10+           | yes           |
 
 ## Installation
 
@@ -81,43 +121,6 @@ ckanext.dimred.allowed_methods = umap
 ckanext.dimred.max_rows = 10000
 ckanext.dimred.enable_categorical = true
 ```
-
-## Usage
-
-1. Add a tabular resource (csv/tsv/xls/xlsx).
-2. Create a new resource view of type `dimred_view`.
-3. (Optional) Choose method (`umap`/`tsne`), pick `color_by` column, and select feature
-   columns.
-4. Save or Preview to see the rendered embedding (PNG).
-
-API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
-embedding/meta.
-
-## Example
-
-Iris dataset:
-
-| rownames | Sepal.Length | Sepal.Width | Petal.Length | Petal.Width | Species    |
-|----------|--------------|-------------|--------------|-------------|------------|
-| 1        | 5.1          | 3.5         | 1.4          | 0.2         | setosa     |
-| 2        | 4.9          | 3.0         | 1.4          | 0.2         | setosa     |
-| ...      | ...          | ...         | ...          | ...         | ...        |
-| 51       | 7.0          | 3.2         | 4.7          | 1.4         | versicolor |
-| 52       | 6.4          | 3.2         | 4.5          | 1.5         | versicolor |
-| ...      | ...          | ...         | ...          | ...         | ...        |
-| 101      | 6.3          | 3.3         | 6.0          | 2.5         | virginica  |
-| 102      | 5.8          | 2.7         | 5.1          | 1.9         | virginica  |
-| ...      | ...          | ...         | ...          | ...         | ...        |
-
-
-Creating the dimred view: method, color_by, feature selection:
-
-![Creating the dimred view](https://raw.githubusercontent.com/DataShades/ckanext-dimred/master/doc/example_form.png)
-
-Rendered 2D embedding PNG:
-
-![Rendered 2D embedding PNG](https://raw.githubusercontent.com/DataShades/ckanext-dimred/master/doc/example_umap_preview.png)
-
 
 ## Developer installation
 
