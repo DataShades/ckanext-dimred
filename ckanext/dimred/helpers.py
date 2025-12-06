@@ -46,8 +46,8 @@ def dimred_color_options_from_resource(
         if not adapter_cls:
             return options
         adapter = adapter_cls(resource, resource_view or {})
-        df = adapter.get_dataframe()
-        options.extend({"value": col, "text": col} for col in df.columns)
+        cols = adapter.get_columns()
+        options.extend({"value": col, "text": col} for col in cols)
     except DimredError:
         return options
 
@@ -65,8 +65,8 @@ def dimred_feature_options_from_resource(
         if not adapter_cls:
             return options
         adapter = adapter_cls(resource, resource_view or {})
-        df = adapter.get_dataframe()
-        options.extend({"value": col, "text": col} for col in df.columns)
+        cols = adapter.get_columns()
+        options.extend({"value": col, "text": col} for col in cols)
 
     except DimredError:
         return options

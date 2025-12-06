@@ -101,16 +101,25 @@ class BaseAdapter:
         readable_size = dimred_utils.printable_file_size(max_size_bytes)
         raise DimredResourceSizeError(readable_size)
 
-    def make_request(self, url: str) -> bytes:
-        """Make a GET request to the specified URL and return the raw content."""
+    def fetch_remote(self, url: str, max_bytes: int | None = None) -> bytes:
+        """Make a GET request and return up to max_bytes (or full) content."""
         try:
             with requests.get(url, timeout=DEFAULT_TIMEOUT, stream=True) as resp:
                 resp.raise_for_status()
-                content = resp.content
+
+                if max_bytes is None:
+                    return resp.content
+
+                content: bytearray = bytearray()
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if not chunk:
+                        break
+                    content.extend(chunk)
+                    if len(content) >= max_bytes:
+                        break
+                return bytes(content)
         except requests.RequestException as e:
             raise DimredRemoteFetchError(str(e)) from e
-
-        return content
 
     def get_dataframe(self):
         """Return a pandas.DataFrame representing the tabular data.

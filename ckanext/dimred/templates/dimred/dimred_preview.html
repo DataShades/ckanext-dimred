@@ -1,8 +1,8 @@
 {% extends "dataviewer/base.html" %}
 
 {% block styles %}
-  {{ super() }}
-  {% asset 'dimred/dimred-css' %}
+    {{ super() }}
+    {% asset 'dimred/dimred-css' %}
 {% endblock %}
 
 {% block page %}
@@ -30,24 +30,34 @@
                     <div class="dimred-meta">
                         <ul>
                             {% if meta.method %}
-                                <li><strong>Method:</strong> {{ meta.method }}</li>
+                                <li>
+                                    <strong>{{ _('Method') }}:</strong> {{ meta.method }}
+                                </li>
                             {% endif %}
-                            <li><strong>Rows used:</strong> {{ info.n_rows_used }}
-                                (original: {{ info.n_rows_original }})
+                            <li>
+                                <strong>{{ _('Rows used') }}:</strong>
+                                {{ info.n_rows_used }}
+                                ({{ _('original') }}: {{ info.n_rows_original }})
                             </li>
-                            <li><strong>Features:</strong> {{ info.n_features }}</li>
+                            <li>
+                                <strong>{{ _('Features') }}:</strong> {{ info.n_features }}
+                            </li>
                             {% if info.numeric_used %}
-                                <li><strong>Numeric columns:</strong> {{ ',
-                        '.join(info.numeric_used) }}
+                                <li>
+                                    <strong>{{ _('Numeric columns') }}:</strong>
+                                    {{ ', '.join(info.numeric_used) }}
                                 </li>
                             {% endif %}
                             {% if info.categorical_used %}
-                                <li><strong>Categorical columns:</strong> {{ ',
-                        '.join(info.categorical_used) }}
+                                <li>
+                                    <strong>{{ _('Categorical columns') }}:</strong>
+                                    {{ ', '.join(info.categorical_used) }}
                                 </li>
                             {% endif %}
                             {% if info.color_by %}
-                                <li><strong>Color by:</strong> {{ info.color_by }}</li>
+                                <li>
+                                    <strong>{{ _('Color by') }}:</strong> {{ info.color_by }}
+                                </li>
                             {% endif %}
                         </ul>
                     </div>
@@ -56,5 +66,3 @@
         </div>
     </div>
 {% endblock %}
-
-{% asset 'dimred/dimred-css' %}

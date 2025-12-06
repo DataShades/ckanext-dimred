@@ -16,7 +16,6 @@
     ) }}
 </div>
 
-{% set fields = h.resource_view_get_fields(resource) or [] %}
 {% set color_value = data.get('color_by', resource_view.color_by) if resource_view else data.get('color_by') %}
 {% set color_options = h.dimred_color_options_from_resource(resource, resource_view) %}
 {% set feature_options = h.dimred_feature_options_from_resource(resource, resource_view) %}
