@@ -8,7 +8,7 @@ view that:
 Create the view, select a method, and generate a 2D projection of your data. You can
 color points by a chosen column and control which columns are used as features.
 
-![t-SNE embedding PNG](doc/example_tsne_preview.png)
+![t-SNE embedding PNG](doc/example_umap_preview.png)
 
 ## How it works
 
@@ -57,7 +57,7 @@ Creating the dimred view: Method, Feature selection, Color by:
 
 Rendered 2D embedding PNG:
 
-![Rendered 2D embedding PNG](doc/example_umap_preview.png)
+![Rendered 2D embedding PNG](doc/example_tsne_preview.png)
 
 ## Requirements
 
