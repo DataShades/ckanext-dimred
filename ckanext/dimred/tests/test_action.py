@@ -7,6 +7,13 @@ import pytest
 import ckan.plugins.toolkit as tk
 from ckan.tests.helpers import call_action
 
+from ckanext.dimred.adapters.tabular import TabularAdapter
+from ckanext.dimred.exception import (
+    DimredFeatureError,
+    DimredNumericColumnError,
+    DimredResourceSizeError,
+)
+
 IRIS_CSV = pathlib.Path(__file__).parent / "data" / "iris.csv"
 
 
@@ -63,3 +70,100 @@ def test_dimred_get_dimred_preview_color_and_features(package, create_with_uploa
 def test_dimred_get_dimred_preview_validation_error():
     with pytest.raises(tk.ValidationError):
         call_action("dimred_get_dimred_preview", {})
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_pipeline_no_numeric_columns(package, create_with_upload):
+    csv_content = "a,b\nfoo,bar\nbaz,qux\n"
+    resource = create_with_upload(
+        csv_content.encode("utf-8"), "non_numeric.csv", format="csv", package_id=package["id"]
+    )
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="umap",
+    )
+
+    with pytest.raises(DimredNumericColumnError):
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_pipeline_feature_filter_removes_numeric(package, create_with_upload):
+    csv_content = "num1,num2,cat\n1,2,x\n3,4,y\n"
+    resource = create_with_upload(
+        csv_content.encode("utf-8"), "feature_filter.csv", format="csv", package_id=package["id"]
+    )
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="umap",
+        feature_columns=["cat"],
+    )
+
+    with pytest.raises(DimredNumericColumnError):
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_pipeline_single_numeric_feature(package, create_with_upload):
+    csv_content = "value\n1\n2\n3\n"
+    resource = create_with_upload(
+        csv_content.encode("utf-8"), "single_numeric.csv", format="csv", package_id=package["id"]
+    )
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="umap",
+    )
+
+    with pytest.raises(DimredFeatureError):
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+
+@pytest.mark.usefixtures("with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_file_size_mb", "1")
+def test_tabular_adapter_respects_size_limit(tmp_path):
+    csv_path = tmp_path / "big.csv"
+    csv_path.write_text("a,b\n1,2\n", encoding="utf-8")
+
+    adapter = TabularAdapter(
+        {"format": "csv", "size": 2 * 1024 * 1024},
+        {},
+        filepath=str(csv_path),
+    )
+
+    with pytest.raises(DimredResourceSizeError) as excinfo:
+        adapter.get_dataframe()
+
+    assert str(excinfo.value) == "1.0 MB"
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_pipeline_disallowed_method(package, create_with_upload):
+    csv_content = "x,y\n1,2\n3,4\n"
+    resource = create_with_upload(csv_content.encode("utf-8"), "data.csv", format="csv", package_id=package["id"])
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action(
+            "resource_view_create",
+            {},
+            resource_id=resource["id"],
+            view_type="dimred_view",
+            title="Dimred",
+            method="abc",
+        )
+
+    assert "Method 'abc' is not allowed." in excinfo.value.error_dict["method"][0]
