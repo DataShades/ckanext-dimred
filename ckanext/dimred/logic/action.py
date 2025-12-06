@@ -94,10 +94,15 @@ def _build_dimred_preview(
     return embedding, meta
 
 
-def _parse_method_params(raw_params: str | None) -> dict[str, Any]:
-    """Parse method_params JSON string into a dict."""
-    if not raw_params:
+def _parse_method_params(raw_params: str | dict[str, Any] | None) -> dict[str, Any]:
+    """Parse method_params JSON string or dict into a dict."""
+    if raw_params is None:
         return {}
+    if isinstance(raw_params, dict):
+        return raw_params
+    if not isinstance(raw_params, str):
+        raise tk.ValidationError({"method_params": ["method_params must be a JSON object."]})
+
     raw_params = raw_params.strip()
     if not raw_params:
         return {}
@@ -247,6 +252,7 @@ def _build_feature_frame(df: pd.DataFrame, numeric_cols: list[str], categorical_
 
     df_features = df_features.astype(float)
     df_features = df_features.fillna(df_features.mean())
+    df_features = df_features.fillna(0.0)
 
     if df_features.shape[1] < 2:  # noqa PLR2004
         raise DimredFeatureError

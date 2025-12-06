@@ -18,11 +18,14 @@ def dimred_get_dimred_preview_schema(
 def dimred_form_schema(
     ignore_empty: types.Validator,
     unicode_safe: types.Validator,
+    dimred_allowed_method: types.Validator,
+    dimred_feature_columns_list: types.Validator,
+    dimred_method_params_object: types.Validator,
 ) -> types.Schema:
     """Validation schema for the dimred preview form."""
     return {
-        "method": [ignore_empty, unicode_safe],
-        "feature_columns": [ignore_empty],
+        "method": [ignore_empty, unicode_safe, dimred_allowed_method],
+        "feature_columns": [ignore_empty, dimred_feature_columns_list],
         "color_by": [ignore_empty, unicode_safe],
-        "method_params": [ignore_empty, unicode_safe],
+        "method_params": [ignore_empty, dimred_method_params_object],
     }

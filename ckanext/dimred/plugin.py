@@ -19,6 +19,7 @@ from ckanext.dimred.logic import schema
 @tk.blanket.config_declarations
 @tk.blanket.helpers
 @tk.blanket.auth_functions
+@tk.blanket.validators
 class DimredPlugin(p.SingletonPlugin):
     p.implements(p.IConfigurable)
     p.implements(p.IConfigurer)
