@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from ckanext.dimred import config as dimred_config
 from ckanext.dimred import helpers
 
 
@@ -51,3 +52,31 @@ def test_feature_options_use_columns(monkeypatch):
     assert adapter.columns_called is True
     assert adapter.dataframe_called is False
     assert [o["value"] for o in opts] == ["c1", "c2"]
+
+
+def test_render_asset_default_echarts(monkeypatch):
+    monkeypatch.setattr(dimred_config, "render_backend", lambda: "echarts")
+    monkeypatch.setattr(dimred_config, "render_asset", lambda: "")
+
+    assert helpers.dimred_render_asset() == "dimred/dimred-echarts-js"
+
+
+def test_render_asset_custom(monkeypatch):
+    monkeypatch.setattr(dimred_config, "render_backend", lambda: "custom")
+    monkeypatch.setattr(dimred_config, "render_asset", lambda: "my/custom.js")
+
+    assert helpers.dimred_render_asset() == "my/custom.js"
+
+
+def test_render_module_default_echarts(monkeypatch):
+    monkeypatch.setattr(dimred_config, "render_backend", lambda: "echarts")
+    monkeypatch.setattr(dimred_config, "render_module", lambda: "")
+
+    assert helpers.dimred_render_module() == "dimred-view-echarts"
+
+
+def test_render_module_custom(monkeypatch):
+    monkeypatch.setattr(dimred_config, "render_backend", lambda: "custom")
+    monkeypatch.setattr(dimred_config, "render_module", lambda: "my-module")
+
+    assert helpers.dimred_render_module() == "my-module"

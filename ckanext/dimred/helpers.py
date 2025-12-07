@@ -104,17 +104,38 @@ def dimred_methods_defaults() -> dict[str, dict[str, Any]]:
 
 def dimred_method_labels() -> dict[str, str]:
     """Return mapping of method names to display labels."""
-    base = {
+    return {
         "umap": "UMAP",
         "tsne": "t-SNE",
         "pca": "PCA",
     }
-    extra = getattr(dimred_config, "method_labels", lambda: {})()
-    if isinstance(extra, dict):
-        base.update({str(k): str(v) for k, v in extra.items()})
-    return base
 
 
 def dimred_method_label(method: str) -> str:
     """Return a friendly label for a method name."""
     return dimred_method_labels().get(method, method)
+
+
+def dimred_render_asset() -> str | None:
+    """Return asset bundle for render backend (customizable)."""
+    custom = dimred_config.render_asset()
+    if custom:
+        return custom
+    if _use_echarts():
+        return "dimred/dimred-echarts-js"
+    return None
+
+
+def dimred_render_module() -> str | None:
+    """Return CKAN module name for render backend (customizable)."""
+    custom = dimred_config.render_module()
+    if custom:
+        return custom
+    if _use_echarts():
+        return "dimred-view-echarts"
+    return None
+
+
+def _use_echarts() -> bool:
+    """True if echarts backend is selected."""
+    return dimred_config.render_backend() == "echarts"

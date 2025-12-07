@@ -9,6 +9,7 @@ import ckan.plugins.toolkit as tk
 from ckan import types
 from ckan.common import CKANConfig
 
+from ckanext.dimred import config as dimred_config
 from ckanext.dimred import utils as dimred_utils
 from ckanext.dimred.adapters import adapter_registry
 from ckanext.dimred.exception import DimredError, DimredPreviewError
@@ -19,7 +20,6 @@ from ckanext.dimred.utils import cache as dimred_cache
 @tk.blanket.actions
 @tk.blanket.config_declarations
 @tk.blanket.helpers
-@tk.blanket.auth_functions
 @tk.blanket.validators
 @tk.blanket.blueprints
 class DimredPlugin(p.SingletonPlugin):
@@ -66,12 +66,15 @@ class DimredPlugin(p.SingletonPlugin):
         """Prepare variables for the template."""
         resource = data_dict["resource"]
         resource_view = data_dict["resource_view"]
+        render_backend = dimred_config.render_backend()
 
         if not resource_view.get("id"):
             return {
                 "image_data_url": None,
+                "embedding": None,
                 "meta": {},
                 "error": None,
+                "render_backend": render_backend,
                 "resource": resource,
                 "resource_view": resource_view,
                 "package": data_dict.get("package", {}),
@@ -79,25 +82,31 @@ class DimredPlugin(p.SingletonPlugin):
 
         try:
             result = tk.get_action("dimred_get_dimred_preview")(
-                context,
+                {},
                 {"id": resource["id"], "view_id": resource_view["id"]},
             )
 
             _raise_if_error(result)
 
-            embedding = np.array(result["embedding"])
+            embedding = result["embedding"]
             meta = result["meta"]
 
-            image_data_url = dimred_utils.embedding_to_png_data_url(embedding, meta)
-
+            if render_backend == "matplotlib":
+                image_data_url = dimred_utils.embedding_to_png_data_url(np.array(embedding), meta)
+                embedding = None  # avoid passing large arrays to the template when unused
+            else:
+                image_data_url = None
             error = None
-        except (DimredError, tk.ValidationError) as exc:
+        except (DimredError, tk.ValidationError, tk.NotAuthorized) as exc:
             image_data_url = None
+            embedding = None
             meta = {}
             error = str(exc)
 
         return {
             "image_data_url": image_data_url,
+            "render_backend": render_backend,
+            "embedding": embedding,
             "meta": meta,
             "error": error,
             "resource": resource,

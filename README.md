@@ -20,7 +20,9 @@ color points by a chosen column and control which columns are used as features.
   or [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
   or [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html),
   with configurable defaults and per-view JSON overrides.
-- Rendering: embedding plotted to PNG.
+- Rendering: configurable backend — interactive [Apache ECharts](https://echarts.apache.org/)
+  (default) or static Matplotlib PNG; pluggable to custom renderer if you override
+  bundle/module.
 - API: `dimred_get_dimred_preview` returns the embedding and metadata
   (prep info, method params) for programmatic use.
 - Caching: results are cached in Redis by default so repeat calls with
@@ -31,10 +33,11 @@ color points by a chosen column and control which columns are used as features.
 
 1. Add a tabular resource (csv/tsv/xls/xlsx).
 2. Create a new resource view of type `dimred_view`.
-3. (Optional) Choose method (`umap`/`tsne`/`pca`), pick `Color by column`, and select feature
+3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, and select feature
    columns.
-4. Save or Preview to see the rendered embedding (PNG), and use “Download embedding (CSV)”
-   to get the coordinates.
+4. Save or Preview to see the rendered embedding (interactive or PNG, depending on
+   `ckanext.dimred.render_backend`), and use “Download embedding (CSV)” to get the
+   coordinates.
 
 API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
 embedding/meta.
@@ -108,6 +111,9 @@ General defaults:
 - `ckanext.dimred.export_enabled` (default: `true`)
 - `ckanext.dimred.cache_enabled` (default: `true`)
 - `ckanext.dimred.cache_ttl` (default: `3600`)
+- `ckanext.dimred.render_backend` (default: `echarts`; `echarts` for interactive chart, `matplotlib` for static PNG)
+- `ckanext.dimred.render_asset` (optional; override the webassets bundle for the configured render backend)
+- `ckanext.dimred.render_module` (optional; override the CKAN JS module for the configured render backend)
 
 UMAP defaults:
 

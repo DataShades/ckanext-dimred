@@ -50,6 +50,27 @@ groups:
         description: >
           Enable the "Download embedding (CSV)" export button and endpoint.
 
+      - key: ckanext.dimred.render_backend
+        default: echarts
+        type: base
+        description: >
+          Render backend for dimred preview: 'echarts' (interactive) or 'matplotlib'
+          (static PNG).
+
+      - key: ckanext.dimred.render_asset
+        default: ""
+        type: base
+        description: >
+          Optional webassets bundle name to load for the configured render backend
+          (defaults to built-in bundle for echarts).
+
+      - key: ckanext.dimred.render_module
+        default: ""
+        type: base
+        description: >
+          Optional CKAN JS module name to initialize for the configured render backend
+          (defaults to built-in module for echarts).
+
   - annotation: Caching
     options:
       - key: ckanext.dimred.cache_enabled

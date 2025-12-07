@@ -5,6 +5,14 @@
     {% asset 'dimred/dimred-css' %}
 {% endblock %}
 
+{% block scripts %}
+    {{ super() }}
+    {% set render_asset = h.dimred_render_asset() %}
+    {% if render_asset %}
+        {% asset render_asset %}
+    {% endif %}
+{% endblock %}
+
 {% block page %}
     <div class="dimred-view page">
         {% block dimred_wrapper %}
@@ -19,13 +27,23 @@
                     {% block dimred_body %}
                         {% if error %}
                             <div class="alert alert-danger">{{ error }}</div>
-                        {% elif image_data_url %}
+                        {% elif render_backend == 'matplotlib' and image_data_url %}
                             {% block dimred_image %}
                                 <img
                                         src="{{ image_data_url }}"
                                         alt="{{ _('Dimensionality reduction plot') }}"
                                         class="dimred-plot"
                                 />
+                            {% endblock %}
+                        {% elif h.dimred_render_module() and embedding %}
+                            {% block dimred_echarts %}
+                                <div
+                                        id="dimred-js-render"
+                                        class="dimred-js-render"
+                                        data-module="{{ h.dimred_render_module() }}"
+                                        data-embedding="{{ h.dump_json(embedding) }}"
+                                        data-meta="{{ h.dump_json(meta) }}"
+                                ></div>
                             {% endblock %}
                         {% else %}
                             <p>{{ _('No embedding image available.') }}</p>

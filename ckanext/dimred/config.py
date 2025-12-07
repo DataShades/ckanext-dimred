@@ -13,6 +13,9 @@ MAX_CATEGORIES_FOR_OHE = "ckanext.dimred.max_categories_for_ohe"
 CACHE_ENABLED = "ckanext.dimred.cache_enabled"
 CACHE_TTL = "ckanext.dimred.cache_ttl"
 EXPORT_ENABLED = "ckanext.dimred.export_enabled"
+RENDER_BACKEND = "ckanext.dimred.render_backend"
+RENDER_ASSET = "ckanext.dimred.render_asset"
+RENDER_MODULE = "ckanext.dimred.render_module"
 UMAP_N_NEIGHBORS = "ckanext.dimred.umap.n_neighbors"
 UMAP_MIN_DIST = "ckanext.dimred.umap.min_dist"
 UMAP_N_COMPONENTS = "ckanext.dimred.umap.n_components"
@@ -30,11 +33,7 @@ def default_method() -> str:
 
 
 def allowed_methods() -> list[str]:
-    """List of enabled dimred methods.
-
-    With a proper config_declaration this will already be a list, but
-    we also handle a space-separated string just in case.
-    """
+    """List of enabled dimred methods."""
     return tk.config[ALLOWED_METHODS]
 
 
@@ -71,6 +70,21 @@ def cache_ttl() -> int:
 def export_enabled() -> bool:
     """Whether embedding export is enabled."""
     return tk.config[EXPORT_ENABLED]
+
+
+def render_backend() -> str:
+    """Return the render backend ('echarts' or 'matplotlib')."""
+    return tk.config[RENDER_BACKEND]
+
+
+def render_asset() -> str | None:
+    """Optional webasset bundle name for the selected backend."""
+    return tk.config[RENDER_ASSET]
+
+
+def render_module() -> str | None:
+    """Optional CKAN module name for the selected backend."""
+    return tk.config[RENDER_MODULE]
 
 
 def umap_n_neighbors() -> int:
