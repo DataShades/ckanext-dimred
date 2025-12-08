@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 from ckan import types
+from ckan.logic import validate
 from ckan.plugins import toolkit as tk
 
 from ckanext.dimred import config as dimred_config
@@ -24,7 +25,7 @@ from ckanext.dimred.utils.export import embedding_to_csv
 
 
 @tk.side_effect_free
-@tk.validate(schema.dimred_get_dimred_preview_schema)
+@validate(schema.dimred_get_dimred_preview_schema)
 def dimred_get_dimred_preview(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
     """Return embedding and metadata for a given resource + view pair.
 
@@ -83,7 +84,7 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
 
 
 @tk.side_effect_free
-@tk.validate(schema.dimred_export_embedding_schema)
+@validate(schema.dimred_export_embedding_schema)
 def dimred_export_embedding(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
     """Return CSV export for a dimred preview."""
     if not dimred_config.export_enabled():
@@ -244,7 +245,7 @@ def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tupl
 
 
 def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) -> list[str]:
-    """Parse feature selection from resource_view and tk.validate against df columns."""
+    """Parse feature selection from resource_view and validate against df columns."""
     raw_features = resource_view.get("feature_columns") or []
     selected: list[str] = []
     if raw_features:
