@@ -80,3 +80,16 @@ def test_render_module_custom(monkeypatch):
     monkeypatch.setattr(dimred_config, "render_module", lambda: "my-module")
 
     assert helpers.dimred_render_module() == "my-module"
+
+
+def test_render_asset_respects_backend_arg(monkeypatch):
+    monkeypatch.setattr(dimred_config, "render_backend", lambda: "echarts")
+    monkeypatch.setattr(dimred_config, "render_asset", lambda: "")
+
+    assert helpers.dimred_render_asset("matplotlib") is None
+
+
+def test_render_backend_default(monkeypatch):
+    monkeypatch.setattr(dimred_config, "render_backend", lambda: "matplotlib")
+
+    assert helpers.dimred_render_backend_default() == "matplotlib"

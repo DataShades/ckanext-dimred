@@ -2,6 +2,10 @@
 
 {% set method_options = h.dimred_allowed_methods_options() %}
 {% set method_value = data.get('method', resource_view.method) if resource_view else data.get('method') %}
+{% set render_backend_value = data.get('render_backend', resource_view.render_backend) if resource_view else data.get('render_backend') %}
+{% if not render_backend_value %}
+    {% set render_backend_value = h.dimred_render_backend_default() %}
+{% endif %}
 
 {% block view_form_filters %}{% endblock %}
 
@@ -84,6 +88,17 @@
             'data-module-defaults': h.dump_json(defaults_map)
         },
         rows=10
+    ) }}
+</div>
+
+<div class="form-group control-group">
+    {{ form.select(
+        'render_backend',
+        id='field-render-backend',
+        label=_('Render backend'),
+        options=h.dimred_render_backend_options(),
+        selected=render_backend_value,
+        classes=['control-full']
     ) }}
 </div>
 

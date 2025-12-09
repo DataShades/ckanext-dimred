@@ -21,8 +21,9 @@ can color points by a chosen column and control which columns are used as featur
   or [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html),
   with configurable defaults and per-view JSON overrides.
 - Rendering: configurable backend — interactive [Apache ECharts](https://echarts.apache.org/)
-  with 3D scatter support (default) or static Matplotlib PNG (2D/3D); pluggable to
-  custom renderer if you override bundle/module.
+  with 3D scatter support (default) or static Matplotlib PNG (2D/3D); choose per view
+  in the form, with the config value as the default; pluggable to custom renderer if
+  you override bundle/module.
 - API: `dimred_get_dimred_preview` returns the embedding and metadata
   (prep info, method params) for programmatic use.
 - Caching: results are cached in Redis by default so repeat calls with
@@ -35,7 +36,9 @@ can color points by a chosen column and control which columns are used as featur
 2. Create a new resource view of type `dimred_view`.
 3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, and select feature
    columns.
-4. Save or Preview to see the rendered embedding (interactive or PNG, depending on
+4. (Optional) Pick render backend (`ECharts` interactive or `Matplotlib` PNG) — defaults
+   to the config value.
+5. Save or Preview to see the rendered embedding (interactive or PNG, depending on
    `ckanext.dimred.render_backend`), and use “Download embedding (CSV)” to get the
    coordinates.
 

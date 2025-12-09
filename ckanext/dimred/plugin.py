@@ -66,7 +66,10 @@ class DimredPlugin(p.SingletonPlugin):
         """Prepare variables for the template."""
         resource = data_dict["resource"]
         resource_view = data_dict["resource_view"]
-        render_backend = dimred_config.render_backend()
+        render_backend_raw = resource_view.get("render_backend") or dimred_config.render_backend()
+        render_backend = str(render_backend_raw).strip() if render_backend_raw is not None else ""
+        if not render_backend:
+            render_backend = dimred_config.render_backend()
 
         if not resource_view.get("id"):
             return {

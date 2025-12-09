@@ -116,26 +116,43 @@ def dimred_method_label(method: str) -> str:
     return dimred_method_labels().get(method, method)
 
 
-def dimred_render_asset() -> str | None:
+def dimred_render_backend_default() -> str:
+    """Return default render backend from config."""
+    return dimred_config.render_backend()
+
+
+def dimred_render_backend_options() -> list[dict[str, str]]:
+    """Return select options for render backend."""
+    labels = {
+        "echarts": tk._("ECharts (interactive)"),
+        "matplotlib": tk._("Matplotlib (PNG)"),
+    }
+    return [{"value": key, "text": labels.get(key, key)} for key in ("echarts", "matplotlib")]
+
+
+def dimred_render_asset(render_backend: str | None = None) -> str | None:
     """Return asset bundle for render backend (customizable)."""
+    backend = render_backend or dimred_config.render_backend()
     custom = dimred_config.render_asset()
     if custom:
         return custom
-    if _use_echarts():
+    if _use_echarts(backend):
         return "dimred/dimred-echarts-js"
     return None
 
 
-def dimred_render_module() -> str | None:
+def dimred_render_module(render_backend: str | None = None) -> str | None:
     """Return CKAN module name for render backend (customizable)."""
+    backend = render_backend or dimred_config.render_backend()
     custom = dimred_config.render_module()
     if custom:
         return custom
-    if _use_echarts():
+    if _use_echarts(backend):
         return "dimred-view-echarts"
     return None
 
 
-def _use_echarts() -> bool:
+def _use_echarts(render_backend: str | None = None) -> bool:
     """True if echarts backend is selected."""
-    return dimred_config.render_backend() == "echarts"
+    backend = render_backend or dimred_config.render_backend()
+    return backend == "echarts"

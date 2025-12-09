@@ -7,7 +7,7 @@
 
 {% block scripts %}
     {{ super() }}
-    {% set render_asset = h.dimred_render_asset() %}
+    {% set render_asset = h.dimred_render_asset(render_backend) %}
     {% if render_asset %}
         {% asset render_asset %}
     {% endif %}
@@ -35,12 +35,12 @@
                                         class="dimred-plot"
                                 />
                             {% endblock %}
-                        {% elif h.dimred_render_module() and embedding %}
+                        {% elif h.dimred_render_module(render_backend) and embedding %}
                             {% block dimred_echarts %}
                                 <div
                                         id="dimred-js-render"
                                         class="dimred-js-render"
-                                        data-module="{{ h.dimred_render_module() }}"
+                                        data-module="{{ h.dimred_render_module(render_backend) }}"
                                         data-embedding="{{ h.dump_json(embedding) }}"
                                         data-meta="{{ h.dump_json(meta) }}"
                                 ></div>

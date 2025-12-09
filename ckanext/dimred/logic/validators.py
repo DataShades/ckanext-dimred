@@ -76,3 +76,19 @@ def dimred_method_params_object(value: Any, context: types.Context) -> dict[str,
         raise tk.Invalid(tk._("method_params must be a JSON object."))
 
     raise tk.Invalid(tk._("method_params must be a JSON object."))
+
+
+def dimred_allowed_backend(value: Any, context: types.Context) -> str:
+    """Validate that render_backend is one of the supported values."""
+    if value in (None, ""):
+        return value
+
+    backend = str(value).strip()
+    if not backend:
+        return backend
+
+    allowed = {"echarts", "matplotlib"}
+    if backend not in allowed:
+        raise tk.Invalid(tk._("Render backend '{backend}' is not supported.").format(backend=backend))
+
+    return backend

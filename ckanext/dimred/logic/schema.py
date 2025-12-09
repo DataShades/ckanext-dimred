@@ -15,12 +15,13 @@ def dimred_get_dimred_preview_schema(
 
 
 @validator_args
-def dimred_form_schema(
+def dimred_form_schema(  # noqa PLR0913
     ignore_empty: types.Validator,
     unicode_safe: types.Validator,
     dimred_allowed_method: types.Validator,
     dimred_feature_columns_list: types.Validator,
     dimred_method_params_object: types.Validator,
+    dimred_allowed_backend: types.Validator,
 ) -> types.Schema:
     """Validation schema for the dimred preview form."""
     return {
@@ -28,6 +29,7 @@ def dimred_form_schema(
         "feature_columns": [ignore_empty, dimred_feature_columns_list],
         "color_by": [ignore_empty, unicode_safe],
         "method_params": [ignore_empty, dimred_method_params_object],
+        "render_backend": [ignore_empty, unicode_safe, dimred_allowed_backend],
     }
 
 
