@@ -12,6 +12,7 @@ dimred-echarts-js:
   output: ckanext-dimred/%(version)s-dimred-echarts.js
   contents:
     - js/vendor/echarts.min.js
+    - js/vendor/echarts-gl.min.js
     - js/dimred-view-echarts.js
   extra:
     preload:

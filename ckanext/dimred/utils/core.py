@@ -55,21 +55,18 @@ def get_adapter_for_resource(
 
 
 def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> str:
-    """Render a simple 2D scatter plot for the embedding and return a data URL."""
+    """Render a 2D/3D scatter plot for the embedding and return a data URL."""
     if embedding.shape[1] < 2:  # noqa PLR2004
         raise DimredEmbeddingError
 
     xs = embedding[:, 0]
     ys = embedding[:, 1]
+    is_3d = embedding.shape[1] >= 3  # noqa PLR2004
+    zs = embedding[:, 2] if is_3d else None
 
     info = meta.get("prepare_info", {}) or {}
     color_by = info.get("color_by")
     color_values = info.get("color_values") or []
-
-    fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
 
     if color_by and len(color_values) == len(xs):
         palette = [
@@ -94,10 +91,22 @@ def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> st
     else:
         colors = "#333333"
 
-    ax.scatter(xs, ys, s=10, c=colors)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    fig.tight_layout()
+    if is_3d:
+        fig = plt.figure(figsize=(5, 4), dpi=100)
+        ax = fig.add_subplot(111, projection="3d")
+        ax.scatter(xs, ys, zs, s=10, c=colors, depthshade=True)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
+        fig.tight_layout()
+    else:
+        fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.scatter(xs, ys, s=10, c=colors)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        fig.tight_layout()
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png")

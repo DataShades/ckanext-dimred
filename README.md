@@ -5,8 +5,8 @@
 Dimensionality-reduction preview for tabular resources. The extension adds a resource
 view that:
 
-Create the view, select a method, and generate a 2D projection of your data. You can
-color points by a chosen column and control which columns are used as features.
+Create the view, select a method, and generate a 2D or 3D projection of your data. You
+can color points by a chosen column and control which columns are used as features.
 
 ![UMAP embedding PNG](doc/example_umap_preview.png)
 
@@ -21,8 +21,8 @@ color points by a chosen column and control which columns are used as features.
   or [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html),
   with configurable defaults and per-view JSON overrides.
 - Rendering: configurable backend — interactive [Apache ECharts](https://echarts.apache.org/)
-  (default) or static Matplotlib PNG; pluggable to custom renderer if you override
-  bundle/module.
+  with 3D scatter support (default) or static Matplotlib PNG (2D/3D); pluggable to
+  custom renderer if you override bundle/module.
 - API: `dimred_get_dimred_preview` returns the embedding and metadata
   (prep info, method params) for programmatic use.
 - Caching: results are cached in Redis by default so repeat calls with
@@ -41,6 +41,15 @@ color points by a chosen column and control which columns are used as features.
 
 API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
 embedding/meta.
+
+### 3D rendering
+
+- Set `n_components` to `3` in the method parameters (UMAP/t-SNE/PCA) to get a 3D
+  embedding.
+- Interactive backend (`ckanext.dimred.render_backend = echarts`) uses ECharts with
+  `echarts-gl` so you can rotate/zoom/pan the point cloud.
+- Static backend (`render_backend = matplotlib`) renders a 3D scatter PNG (fixed view
+  angle, rotatable only when using the interactive backend).
 
 ## Example
 

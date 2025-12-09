@@ -48,10 +48,11 @@ this.ckan.module("dimred-view-echarts", function ($) {
             var colorMap = {};
             var paletteIdx = 0;
 
+            var firstPoint = embedding[0] || [];
+            var is3D = Array.isArray(firstPoint) && firstPoint.length >= 3;
             var points = [];
             $.each(embedding, function (idx, coords) {
-                var x = coords[0];
-                var y = coords[1];
+                var value = is3D ? [coords[0], coords[1], coords[2]] : [coords[0], coords[1]];
                 var label = colorValues.length === embedding.length ? colorValues[idx] : null;
                 var color = null;
                 if (label !== null && label !== undefined && label !== "") {
@@ -61,38 +62,71 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     }
                     color = colorMap[label];
                 }
-                points.push({ value: [x, y], label: label, itemStyle: color ? { color: color } : undefined });
+                points.push({ value: value, label: label, itemStyle: color ? { color: color } : undefined });
             });
 
             var chart = echarts.init(container[0]);
             try {
-                var option = {
-                    tooltip: {
-                        trigger: "item",
-                        formatter: function (params) {
-                            var v = params.value;
-                            var lbl = params.data.label;
-                            var text = "x: " + v[0] + "<br/>y: " + v[1];
-                            if (colorBy && lbl !== null && lbl !== undefined) {
-                                text += "<br/>" + colorBy + ": " + lbl;
-                            }
-                            return text;
-                        },
-                    },
-                    xAxis: { type: "value" },
-                    yAxis: { type: "value" },
-                    dataZoom: [
-                        { type: "inside", filterMode: "none" },
-                        { type: "slider", filterMode: "none" },
-                    ],
-                    series: [
-                        {
-                            type: "scatter",
-                            symbolSize: 6,
-                            data: points,
-                        },
-                    ],
+                var tooltipFormatter = function (params) {
+                    var v = params.value;
+                    var lbl = params.data.label;
+                    var text = "x: " + v[0] + "<br/>y: " + v[1];
+                    if (is3D) {
+                        text += "<br/>z: " + v[2];
+                    }
+                    if (colorBy && lbl !== null && lbl !== undefined) {
+                        text += "<br/>" + colorBy + ": " + lbl;
+                    }
+                    return text;
                 };
+
+                var option;
+                if (is3D) {
+                    option = {
+                        tooltip: {
+                            trigger: "item",
+                            formatter: tooltipFormatter,
+                        },
+                        xAxis3D: { type: "value", name: "x" },
+                        yAxis3D: { type: "value", name: "y" },
+                        zAxis3D: { type: "value", name: "z" },
+                        grid3D: {
+                            viewControl: {
+                                projection: "perspective",
+                                rotateSensitivity: 1,
+                                zoomSensitivity: 1,
+                                panSensitivity: 1,
+                            },
+                        },
+                        series: [
+                            {
+                                type: "scatter3D",
+                                symbolSize: 6,
+                                data: points,
+                            },
+                        ],
+                    };
+                } else {
+                    option = {
+                        tooltip: {
+                            trigger: "item",
+                            formatter: tooltipFormatter,
+                        },
+                        xAxis: { type: "value" },
+                        yAxis: { type: "value" },
+                        dataZoom: [
+                            { type: "inside", filterMode: "none" },
+                            { type: "slider", filterMode: "none" },
+                        ],
+                        series: [
+                            {
+                                type: "scatter",
+                                symbolSize: 6,
+                                data: points,
+                            },
+                        ],
+                    };
+                }
 
                 chart.setOption(option);
                 $(window).on("resize", function () {
