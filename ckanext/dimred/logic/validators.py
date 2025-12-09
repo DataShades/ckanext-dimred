@@ -92,3 +92,19 @@ def dimred_allowed_backend(value: Any, context: types.Context) -> str:
         raise tk.Invalid(tk._("Render backend '{backend}' is not supported.").format(backend=backend))
 
     return backend
+
+
+def dimred_n_components(value: Any, context: types.Context) -> int | Any:
+    """Validate that n_components is 2 or 3."""
+    if value in (None, ""):
+        return value
+
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as err:
+        raise tk.Invalid(tk._("n_components must be an integer (2 or 3).")) from err
+
+    if parsed not in (2, 3):  # noqa PLR2004
+        raise tk.Invalid(tk._("n_components must be 2 or 3."))
+
+    return parsed

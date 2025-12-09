@@ -93,3 +93,9 @@ def test_render_backend_default(monkeypatch):
     monkeypatch.setattr(dimred_config, "render_backend", lambda: "matplotlib")
 
     assert helpers.dimred_render_backend_default() == "matplotlib"
+
+
+def test_method_defaults_form_strips_n_components():
+    params = helpers.dimred_method_default_params_form("umap")
+
+    assert "n_components" not in params

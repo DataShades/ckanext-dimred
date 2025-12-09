@@ -119,6 +119,10 @@ def _build_dimred_preview(
 
     method_cls = get_projection_method(method_name)
     method_params = _parse_method_params(resource_view.get("method_params"))
+    n_components = _parse_n_components(resource_view.get("n_components"))
+    if n_components is not None:
+        method_params = dict(method_params)
+        method_params["n_components"] = n_components
 
     reducer: BaseProjectionMethod = method_cls(**method_params)
 
@@ -143,6 +147,7 @@ def _cache_settings(resource_view: dict[str, Any]) -> dict[str, Any]:
         "method_params": resource_view.get("method_params"),
         "feature_columns": resource_view.get("feature_columns"),
         "color_by": resource_view.get("color_by"),
+        "n_components": resource_view.get("n_components"),
         "max_rows": dimred_config.max_rows(),
         "enable_categorical": dimred_config.enable_categorical(),
         "max_categories_for_ohe": dimred_config.max_categories_for_ohe(),
@@ -168,6 +173,21 @@ def _parse_method_params(raw_params: str | dict[str, Any] | None) -> dict[str, A
         raise tk.ValidationError({"method_params": ["Invalid JSON in method_params."]}) from err
     if not isinstance(parsed, dict):
         raise tk.ValidationError({"method_params": ["method_params must be a JSON object."]})
+    return parsed
+
+
+def _parse_n_components(raw_value: Any) -> int | None:
+    """Parse n_components value (allow only 2 or 3)."""
+    if raw_value in (None, ""):
+        return None
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"n_components": ["n_components must be an integer."]}) from err
+
+    if parsed not in (2, 3):  # noqa PLR2004
+        raise tk.ValidationError({"n_components": ["n_components must be 2 or 3."]})
+
     return parsed
 
 

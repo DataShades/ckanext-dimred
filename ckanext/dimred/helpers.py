@@ -102,6 +102,21 @@ def dimred_methods_defaults() -> dict[str, dict[str, Any]]:
     return defaults
 
 
+def dimred_method_default_params_form(method_name: str) -> dict[str, Any]:
+    """Return default params for a method, excluding n_components (handled separately)."""
+    params = dict(dimred_method_default_params(method_name))
+    params.pop("n_components", None)
+    return params
+
+
+def dimred_methods_defaults_form() -> dict[str, dict[str, Any]]:
+    """Return defaults for all methods excluding n_components (for the form textarea)."""
+    defaults: dict[str, dict[str, Any]] = {}
+    for name in dimred_config.allowed_methods():
+        defaults[name] = dimred_method_default_params_form(name)
+    return defaults
+
+
 def dimred_method_labels() -> dict[str, str]:
     """Return mapping of method names to display labels."""
     return {
@@ -125,7 +140,7 @@ def dimred_render_backend_options() -> list[dict[str, str]]:
     """Return select options for render backend."""
     labels = {
         "echarts": tk._("ECharts (interactive)"),
-        "matplotlib": tk._("Matplotlib (PNG)"),
+        "matplotlib": tk._("Matplotlib (static)"),
     }
     return [{"value": key, "text": labels.get(key, key)} for key in ("echarts", "matplotlib")]
 

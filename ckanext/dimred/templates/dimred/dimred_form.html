@@ -6,27 +6,19 @@
 {% if not render_backend_value %}
     {% set render_backend_value = h.dimred_render_backend_default() %}
 {% endif %}
-
-{% block view_form_filters %}{% endblock %}
-
-<div class="form-group control-group">
-    {{ form.select(
-        'method',
-        id='field-method',
-        label=_('Dimensionality reduction method'),
-        options=method_options,
-        selected=method_value or h.dimred_default_method(),
-        classes=['control-full']
-    ) }}
-</div>
-
 {% set color_value = data.get('color_by', resource_view.color_by) if resource_view else data.get('color_by') %}
 {% set color_options = h.dimred_color_options_from_resource(resource, resource_view) %}
 {% set feature_options = h.dimred_feature_options_from_resource(resource, resource_view) %}
 {% set method_for_defaults = method_value or h.dimred_default_method() %}
-{% set default_params = h.dimred_method_default_params(method_for_defaults) %}
-{% set defaults_map = h.dimred_methods_defaults() %}
-{% set params_value = data.get('method_params', resource_view.method_params) if resource_view else data.get('method_params') %}
+{% set default_params_full = h.dimred_method_default_params(method_for_defaults) %}
+{% set default_params = h.dimred_method_default_params_form(method_for_defaults) %}
+{% set raw_params_value = data.get('method_params', resource_view.method_params) if resource_view else data.get('method_params') %}
+{% set n_components_value = data.get('n_components', resource_view.n_components) if resource_view else data.get('n_components') %}
+{% if not n_components_value %}
+    {% set n_components_value = default_params_full.get('n_components', 2) %}
+{% endif %}
+{% set defaults_map = h.dimred_methods_defaults_form() %}
+{% set params_value = raw_params_value %}
 {% if params_value is mapping %}
     {% set params_value = h.dump_json(params_value, indent=2) %}
 {% endif %}
@@ -40,6 +32,28 @@
 {% if not selected_features %}
     {% set selected_features = feature_options | map(attribute='value') | list %}
 {% endif %}
+
+<div class="form-group control-group">
+    {{ form.select(
+        'method',
+        id='field-method',
+        label=_('Dimensionality reduction method'),
+        options=method_options,
+        selected=method_value or h.dimred_default_method(),
+        classes=['control-full']
+    ) }}
+</div>
+
+<div class="form-group control-group">
+    {{ form.select(
+        'n_components',
+        id='field-n-components',
+        label=_('Number of components'),
+        options=[{'value': 2, 'text': '2'}, {'value': 3, 'text': '3'}],
+        selected=n_components_value,
+        classes=['control-full']
+    ) }}
+</div>
 
 {% if feature_options %}
     <div class="form-group control-group">
@@ -79,7 +93,7 @@
     {{ form.textarea(
         'method_params',
         id='field-method-params',
-        label=_('Method parameters (JSON)'),
+        label=_('Method-specific parameters (JSON)'),
         value=params_value,
         placeholder='',
         classes=['control-full'],
@@ -87,7 +101,7 @@
             'data-module': 'dimred-view-form',
             'data-module-defaults': h.dump_json(defaults_map)
         },
-        rows=10
+        rows=5
     ) }}
 </div>
 

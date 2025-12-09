@@ -36,9 +36,11 @@ can color points by a chosen column and control which columns are used as featur
 2. Create a new resource view of type `dimred_view`.
 3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, and select feature
    columns.
-4. (Optional) Pick render backend (`ECharts` interactive or `Matplotlib` PNG) — defaults
+4. (Optional) Choose output components (`2` or `3`); defaults come from the method
+   config (e.g., `ckanext.dimred.umap.n_components`).
+5. (Optional) Pick render backend (`ECharts` interactive or `Matplotlib` PNG) — defaults
    to the config value.
-5. Save or Preview to see the rendered embedding (interactive or PNG, depending on
+6. Save or Preview to see the rendered embedding (interactive or PNG, depending on
    `ckanext.dimred.render_backend`), and use “Download embedding (CSV)” to get the
    coordinates.
 
@@ -47,8 +49,7 @@ embedding/meta.
 
 ### 3D rendering
 
-- Set `n_components` to `3` in the method parameters (UMAP/t-SNE/PCA) to get a 3D
-  embedding.
+- Set `n_components` to `3` in the form (or method parameters) to get a 3D embedding.
 - Interactive backend (`ckanext.dimred.render_backend = echarts`) uses ECharts with
   `echarts-gl` so you can rotate/zoom/pan the point cloud.
 - Static backend (`render_backend = matplotlib`) renders a 3D scatter PNG (fixed view
