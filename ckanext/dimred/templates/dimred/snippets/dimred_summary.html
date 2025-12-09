@@ -1,0 +1,83 @@
+{% set summary = summary or {} %}
+{% if summary %}
+    <div class="dimred-summary mt-2">
+        {% block dimred_summary_header %}
+            <h4 class="module-heading">{{ _('Summary') }}</h4>
+        {% endblock %}
+        <ul>
+            {% if summary.method %}
+                <li>
+                    <strong>{{ _('Method') }}:</strong>
+                    {{ h.dimred_method_label(summary.method) }}
+                            {% if summary.components %} ({{ summary.components }}
+                                {{ _('components') }}){% endif %}
+                </li>
+            {% endif %}
+            {% if summary.rows_used %}
+                <li>
+                    <strong>{{ _('Rows used') }}:</strong>
+                    {{ summary.rows_used }}{% if summary.rows_original %} (
+                        {{ _('original') }}: {{ summary.rows_original }}){% endif %}
+                    {% if summary.points and summary.points != summary.rows_used %}
+                        , {{ _('points in embedding') }}: {{ summary.points }}
+                    {% endif %}
+                </li>
+            {% endif %}
+            {% if summary.color_by %}
+                {% if summary.classes %}
+                    <li>
+                        <strong>{{ _('Color by') }}:</strong> {{ summary.color_by }}
+                    </li>
+                    <li>
+                        <strong>{{ _('Classes') }}:</strong>
+                        {{ summary.classes }}
+                        {% if summary.top_classes %}
+                            — {{ _('Top') }} {{ summary.top_classes|length }}:
+                            {% for cls in summary.top_classes %}
+                                {{ cls.label }} ({{ cls.count }}){% if not loop.last %},
+                            {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </li>
+                {% else %}
+                    <li>
+                        <strong>{{ _('Color by') }}:</strong> {{ summary.color_by }}
+                    </li>
+                {% endif %}
+            {% endif %}
+            {% if summary.ranges %}
+                <li>
+                    <strong>{{ _('Ranges') }}:</strong>
+                    {% for dim in summary.ranges %}
+                        {{ dim.name }} [{{ '%.4g'|format(dim.min) }},
+                        {{ '%.4g'|format(dim.max) }}]{% if not loop.last %};{% endif %}
+                    {% endfor %}
+                </li>
+            {% endif %}
+            {% if summary.features is not none %}
+                <li>
+                    <strong>{{ _('Features') }}:</strong>
+                    {{ summary.features }}
+                    ({{ _('numeric') }}: {{ summary.numeric_count }}, {{ _('categorical') }}: {{ summary.categorical_count }})
+                </li>
+            {% endif %}
+            {% if summary.numeric_sample %}
+                <li>
+                    <strong>{{ _('Numeric columns') }}:</strong>
+                    {{ ', '.join(summary.numeric_sample) }}
+                            {% if summary.numeric_more > 0 %} +
+                                {{ summary.numeric_more }} {{ _('more') }}{% endif %}
+                </li>
+            {% endif %}
+            {% if summary.categorical_sample %}
+                <li>
+                    <strong>{{ _('Categorical columns') }}:</strong>
+                    {{ ', '.join(summary.categorical_sample) }}
+                            {% if summary.categorical_more > 0 %} +
+                                {{ summary.categorical_more }}
+                                {{ _('more') }}{% endif %}
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+{% endif %}

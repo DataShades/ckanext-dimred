@@ -49,44 +49,8 @@
                             <p>{{ _('No embedding image available.') }}</p>
                         {% endif %}
 
-                        {% block dimred_meta %}
-                            {% set info = meta.prepare_info or {} %}
-                            {% if info %}
-                                <div class="dimred-meta">
-                                    <ul>
-                                        {% if meta.method %}
-                                            <li>
-                                                <strong>{{ _('Method') }}:</strong> {{ h.dimred_method_label(meta.method) }}
-                                            </li>
-                                        {% endif %}
-                                        <li>
-                                            <strong>{{ _('Rows used') }}:</strong>
-                                            {{ info.n_rows_used }}
-                                            ({{ _('original') }}: {{ info.n_rows_original }})
-                                        </li>
-                                        <li>
-                                            <strong>{{ _('Features') }}:</strong> {{ info.n_features }}
-                                        </li>
-                                        {% if info.numeric_used %}
-                                            <li>
-                                                <strong>{{ _('Numeric columns') }}:</strong>
-                                                {{ ', '.join(info.numeric_used) }}
-                                            </li>
-                                        {% endif %}
-                                        {% if info.categorical_used %}
-                                            <li>
-                                                <strong>{{ _('Categorical columns') }}:</strong>
-                                                {{ ', '.join(info.categorical_used) }}
-                                            </li>
-                                        {% endif %}
-                                        {% if info.color_by %}
-                                            <li>
-                                                <strong>{{ _('Color by') }}:</strong> {{ info.color_by }}
-                                            </li>
-                                        {% endif %}
-                                    </ul>
-                                </div>
-                            {% endif %}
+                        {% block dimred_summary %}
+                            {{ h.snippet('dimred/snippets/dimred_summary.html', summary=summary, meta=meta) }}
                         {% endblock %}
 
                         {% block dimred_actions %}

@@ -227,7 +227,7 @@ def test_dimred_export_embedding(package, create_with_upload):
     result = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
 
     assert result["filename"].endswith(".csv")
-    assert "dim_1" in result["content"]
+    assert "x" in result["content"]
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")

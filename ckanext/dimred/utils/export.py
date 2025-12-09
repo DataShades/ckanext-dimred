@@ -12,7 +12,8 @@ def embedding_to_csv(embedding: list[list[float]] | np.ndarray, meta: dict[str, 
     arr = np.array(embedding)
     n_dims = arr.shape[1] if arr.ndim > 1 else 1
 
-    headers = [f"dim_{i + 1}" for i in range(n_dims)]
+    labels = ["x", "y", "z"]
+    headers = [labels[i] if i < len(labels) else f"dim_{i + 1}" for i in range(n_dims)]
 
     prepare_info = meta.get("prepare_info", {}) or {}
     color_by = prepare_info.get("color_by")

@@ -50,6 +50,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
 
             var firstPoint = embedding[0] || [];
             var is3D = Array.isArray(firstPoint) && firstPoint.length >= 3;
+            var dimNames = is3D ? ["x", "y", "z"] : ["x", "y"];
             var points = [];
             $.each(embedding, function (idx, coords) {
                 var value = is3D ? [coords[0], coords[1], coords[2]] : [coords[0], coords[1]];
@@ -70,9 +71,9 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 var tooltipFormatter = function (params) {
                     var v = params.value;
                     var lbl = params.data.label;
-                    var text = "x: " + v[0] + "<br/>y: " + v[1];
+                    var text = dimNames[0] + ": " + v[0] + "<br/>" + dimNames[1] + ": " + v[1];
                     if (is3D) {
-                        text += "<br/>z: " + v[2];
+                        text += "<br/>" + dimNames[2] + ": " + v[2];
                     }
                     if (colorBy && lbl !== null && lbl !== undefined) {
                         text += "<br/>" + colorBy + ": " + lbl;
@@ -87,9 +88,9 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             trigger: "item",
                             formatter: tooltipFormatter,
                         },
-                        xAxis3D: { type: "value", name: "x" },
-                        yAxis3D: { type: "value", name: "y" },
-                        zAxis3D: { type: "value", name: "z" },
+                        xAxis3D: { type: "value", name: dimNames[0] },
+                        yAxis3D: { type: "value", name: dimNames[1] },
+                        zAxis3D: { type: "value", name: dimNames[2] },
                         grid3D: {
                             viewControl: {
                                 projection: "perspective",
@@ -112,8 +113,8 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             trigger: "item",
                             formatter: tooltipFormatter,
                         },
-                        xAxis: { type: "value" },
-                        yAxis: { type: "value" },
+                        xAxis: { type: "value", name: dimNames[0] },
+                        yAxis: { type: "value", name: dimNames[1] },
                         dataZoom: [
                             { type: "inside", filterMode: "none" },
                             { type: "slider", filterMode: "none" },

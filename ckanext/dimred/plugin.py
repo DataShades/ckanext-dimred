@@ -93,6 +93,8 @@ class DimredPlugin(p.SingletonPlugin):
 
             embedding = result["embedding"]
             meta = result["meta"]
+            summary_raw = dimred_utils.embedding_summary(np.array(embedding), meta)
+            summary = dimred_utils.build_display_summary(meta, summary_raw)
 
             if render_backend == "matplotlib":
                 image_data_url = dimred_utils.embedding_to_png_data_url(np.array(embedding), meta)
@@ -104,6 +106,7 @@ class DimredPlugin(p.SingletonPlugin):
             image_data_url = None
             embedding = None
             meta = {}
+            summary = {}
             error = str(exc)
 
         return {
@@ -111,6 +114,7 @@ class DimredPlugin(p.SingletonPlugin):
             "render_backend": render_backend,
             "embedding": embedding,
             "meta": meta,
+            "summary": summary,
             "error": error,
             "resource": resource,
             "resource_view": resource_view,
