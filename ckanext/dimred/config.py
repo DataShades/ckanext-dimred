@@ -16,6 +16,7 @@ EXPORT_ENABLED = "ckanext.dimred.export_enabled"
 RENDER_BACKEND = "ckanext.dimred.render_backend"
 RENDER_ASSET = "ckanext.dimred.render_asset"
 RENDER_MODULE = "ckanext.dimred.render_module"
+EMBEDDING_DECIMALS = "ckanext.dimred.embedding_decimals"
 UMAP_N_NEIGHBORS = "ckanext.dimred.umap.n_neighbors"
 UMAP_MIN_DIST = "ckanext.dimred.umap.min_dist"
 UMAP_N_COMPONENTS = "ckanext.dimred.umap.n_components"
@@ -39,12 +40,12 @@ def allowed_methods() -> list[str]:
 
 def max_file_size_mb() -> int:
     """Maximum resource file size (in megabytes) for which dimred is attempted."""
-    return int(tk.config[MAX_FILE_SIZE_MB])
+    return tk.config[MAX_FILE_SIZE_MB]
 
 
 def max_rows() -> int:
     """Maximum number of rows to load from the resource."""
-    return int(tk.config[MAX_ROWS])
+    return tk.config[MAX_ROWS]
 
 
 def enable_categorical() -> bool:
@@ -54,7 +55,7 @@ def enable_categorical() -> bool:
 
 def max_categories_for_ohe() -> int:
     """Maximum distinct values for a categorical column to be one-hot encoded."""
-    return int(tk.config[MAX_CATEGORIES_FOR_OHE])
+    return tk.config[MAX_CATEGORIES_FOR_OHE]
 
 
 def cache_enabled() -> bool:
@@ -64,7 +65,7 @@ def cache_enabled() -> bool:
 
 def cache_ttl() -> int:
     """TTL for cached dimred previews in seconds."""
-    return int(tk.config[CACHE_TTL])
+    return tk.config[CACHE_TTL]
 
 
 def export_enabled() -> bool:
@@ -87,9 +88,14 @@ def render_module() -> str | None:
     return tk.config[RENDER_MODULE]
 
 
+def embedding_decimals() -> int:
+    """Decimal places to round embedding coordinates."""
+    return tk.config[EMBEDDING_DECIMALS]
+
+
 def umap_n_neighbors() -> int:
     """Default UMAP n_neighbors value."""
-    return int(tk.config[UMAP_N_NEIGHBORS])
+    return tk.config[UMAP_N_NEIGHBORS]
 
 
 def umap_min_dist() -> float:
@@ -115,7 +121,7 @@ def tsne_n_components() -> int:
 
 def pca_n_components() -> int:
     """Number of output components for PCA."""
-    return int(tk.config[PCA_N_COMPONENTS])
+    return tk.config[PCA_N_COMPONENTS]
 
 
 def pca_whiten() -> bool:

@@ -71,6 +71,13 @@ groups:
           Optional CKAN JS module name to initialize for the configured render backend
           (defaults to built-in module for echarts).
 
+      - key: ckanext.dimred.embedding_decimals
+        default: 3
+        type: int
+        description: >
+          Number of decimal places to round embedding coordinates before returning
+          or exporting them.
+
   - annotation: Caching
     options:
       - key: ckanext.dimred.cache_enabled

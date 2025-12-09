@@ -127,6 +127,7 @@ General defaults:
 - `ckanext.dimred.render_backend` (default: `echarts`; `echarts` for interactive chart, `matplotlib` for static PNG)
 - `ckanext.dimred.render_asset` (optional; override the webassets bundle for the configured render backend)
 - `ckanext.dimred.render_module` (optional; override the CKAN JS module for the configured render backend)
+- `ckanext.dimred.embedding_decimals` (default: `3`; decimal places to round embedding coordinates before returning/exporting)
 
 UMAP defaults:
 

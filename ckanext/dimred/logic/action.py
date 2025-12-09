@@ -75,7 +75,9 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
         return cached
 
     embedding, meta = _build_dimred_preview(resource, resource_view)
-    embedding_serializable = embedding.tolist() if hasattr(embedding, "tolist") else embedding
+    decimals = dimred_config.embedding_decimals()
+    embedding = np.round(np.asarray(embedding, dtype=float), decimals)
+    embedding_serializable = embedding.tolist()
 
     result = {"embedding": embedding_serializable, "meta": meta}
     cache.save(resource_id, resource_view_id, settings_sig, result)
