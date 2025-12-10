@@ -106,6 +106,81 @@ def test_dimred_get_dimred_preview_color_and_features(package, create_with_uploa
     assert info["numeric_used"] == ["Sepal.Length", "Sepal.Width"]
 
 
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_prepare_info_color_candidates(package, create_with_upload):
+    with open(IRIS_CSV, "rb") as csv:
+        resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="umap",
+        color_by="Species",
+    )
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    prepare = result["meta"]["prepare_info"]
+    candidates = prepare.get("color_candidates") or []
+    assert candidates
+
+    names = {c["name"] for c in candidates if c.get("name")}
+    assert "Species" in names
+    assert "Sepal.Length" in names
+
+    species = next(c for c in candidates if c.get("name") == "Species")
+    assert species["kind"] == "categorical"
+    assert len(species["values"]) == prepare["n_rows_used"]
+    assert set(species["unique_values"]) == {"setosa", "versicolor", "virginica"}
+
+    sepal_length = next(c for c in candidates if c.get("name") == "Sepal.Length")
+    assert sepal_length["kind"] == "numeric"
+    assert sepal_length["min"] < sepal_length["max"]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_color_candidates_respect_cardinality_limits(package, create_with_upload):
+    rows = ["num1,num2,color_col,low_cat,high_cat"]
+    for idx in range(60):
+        rows.append(f"{idx},{idx * 2},label{idx},group{idx % 2},skip{idx}")
+    csv_content = "\n".join(rows)
+
+    resource = create_with_upload(
+        csv_content.encode("utf-8"), "colors.csv", format="csv", package_id=package["id"]
+    )
+
+    view = call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="umap",
+        color_by="color_col",
+    )
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    prepare = result["meta"]["prepare_info"]
+    candidates = prepare.get("color_candidates") or []
+
+    names = {c["name"] for c in candidates if c.get("name")}
+    assert "color_col" in names
+    assert "low_cat" in names
+    assert "high_cat" not in names
+
+    color_candidate = next(c for c in candidates if c.get("name") == "color_col")
+    assert color_candidate["kind"] == "categorical"
+    assert len(color_candidate["values"]) == prepare["n_rows_used"]
+    assert len(color_candidate["unique_values"]) <= dimred_action.dimred_config.max_categories_for_ohe()
+
+    low_cat_candidate = next(c for c in candidates if c.get("name") == "low_cat")
+    assert low_cat_candidate["kind"] == "categorical"
+    assert set(low_cat_candidate["unique_values"]) == {"group0", "group1"}
+
+
 @pytest.mark.usefixtures("with_plugins")
 @pytest.mark.ckan_config("ckan.plugins", "dimred")
 def test_dimred_get_dimred_preview_validation_error():

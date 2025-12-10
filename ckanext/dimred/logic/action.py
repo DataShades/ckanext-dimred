@@ -213,6 +213,7 @@ def _prepare_matrix_from_resource(
 
     numeric_cols = _select_numeric_columns(df, selected_features)
     categorical_cols = _select_categorical_columns(df, numeric_cols, color_by, selected_features)
+    color_candidates = _build_color_candidates(df, color_by, numeric_cols, categorical_cols)
 
     df_features = _build_feature_frame(df, numeric_cols, categorical_cols)
 
@@ -228,6 +229,7 @@ def _prepare_matrix_from_resource(
         "color_by": color_by or None,
         "color_values": color_values,
         "feature_columns": selected_features or None,
+        "color_candidates": color_candidates,
     }
 
     return x_matrix, info
@@ -262,7 +264,13 @@ def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tupl
     """Extract color_by and corresponding values."""
     color_by = (resource_view.get("color_by") or "").strip()
     if color_by and color_by in df.columns:
-        return color_by, df[color_by].astype(str).tolist()
+        series = df[color_by]
+        kind = _infer_color_kind(series)
+        if kind == "numeric":
+            values, _, _ = _serialize_numeric_values(series)
+        else:
+            values, _ = _serialize_categorical_values(series, dimred_config.max_categories_for_ohe())
+        return color_by, values
     return "", None
 
 
@@ -317,6 +325,114 @@ def _select_categorical_columns(
         if 1 < n_unique <= max_cat:
             categorical_cols.append(col)
     return categorical_cols
+
+
+def _build_color_candidates(
+    df: pd.DataFrame,
+    color_by: str,
+    numeric_cols: list[str],
+    categorical_cols: list[str],
+) -> list[dict[str, Any]]:
+    """Prepare color candidates metadata for the frontend dropdown."""
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    max_categories = max(dimred_config.max_categories_for_ohe(), 1)
+
+    def add_candidate(name: str, force: bool = False) -> None:
+        if not name or name in seen:
+            return
+        if name not in df.columns:
+            return
+
+        series = df[name]
+        kind = _infer_color_kind(series)
+
+        if kind == "categorical":
+            n_unique = series.nunique(dropna=True)
+            if not force and (n_unique <= 1 or n_unique > max_categories):
+                return
+            values, unique_values = _serialize_categorical_values(series, max_categories)
+            candidates.append(
+                {
+                    "name": name,
+                    "kind": "categorical",
+                    "values": values,
+                    "unique_values": unique_values,
+                }
+            )
+        else:
+            values, min_val, max_val = _serialize_numeric_values(series)
+            if min_val is None or max_val is None:
+                if not force:
+                    return
+            candidates.append(
+                {
+                    "name": name,
+                    "kind": "numeric",
+                    "values": values,
+                    "min": min_val,
+                    "max": max_val,
+                }
+            )
+
+        seen.add(name)
+
+    add_candidate(color_by, force=True)
+
+    for col in categorical_cols:
+        add_candidate(col)
+
+    for col in numeric_cols:
+        add_candidate(col)
+
+    return candidates
+
+
+def _infer_color_kind(series: pd.Series) -> str:
+    """Return 'categorical' or 'numeric' for a pandas Series."""
+    if pd.api.types.is_bool_dtype(series):
+        return "categorical"
+    if pd.api.types.is_numeric_dtype(series):
+        return "numeric"
+    return "categorical"
+
+
+def _serialize_categorical_values(series: pd.Series, unique_limit: int) -> tuple[list[Any], list[str]]:
+    """Return safe values + limited unique list for categorical series."""
+    values: list[Any] = []
+    unique_values: list[str] = []
+    seen_values: set[str] = set()
+
+    for raw in series.tolist():
+        if pd.isna(raw):
+            values.append(None)
+            continue
+
+        val_str = str(raw)
+        values.append(val_str)
+
+        if val_str in seen_values:
+            continue
+        if len(unique_values) >= unique_limit:
+            continue
+        unique_values.append(val_str)
+        seen_values.add(val_str)
+
+    return values, unique_values
+
+
+def _serialize_numeric_values(series: pd.Series) -> tuple[list[Any], float | None, float | None]:
+    """Return numeric values + min/max for a series."""
+    numeric = pd.to_numeric(series, errors="coerce")
+    values = [None if pd.isna(v) else float(v) for v in numeric.tolist()]
+
+    finite_values = [v for v in values if v is not None and np.isfinite(v)]
+    if not finite_values:
+        return values, None, None
+
+    min_val = float(np.min(finite_values))
+    max_val = float(np.max(finite_values))
+    return values, min_val, max_val
 
 
 def _build_feature_frame(df: pd.DataFrame, numeric_cols: list[str], categorical_cols: list[str]) -> pd.DataFrame:

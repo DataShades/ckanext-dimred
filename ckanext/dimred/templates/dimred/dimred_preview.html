@@ -44,6 +44,7 @@
                                         data-embedding="{{ h.dump_json(embedding) }}"
                                         data-meta="{{ h.dump_json(meta) }}"
                                 ></div>
+                                <div id="dimred-color-select" class="mb-3 dimred-color-select"></div>
                             {% endblock %}
                         {% else %}
                             <p>{{ _('No embedding image available.') }}</p>
