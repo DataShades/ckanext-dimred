@@ -200,6 +200,85 @@ def test_dimred_get_dimred_preview_color_and_features(package, create_with_uploa
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.parametrize(
+    ("view_settings", "field", "message"),
+    [
+        ({"feature_columns": ["x", "missing"]}, "feature_columns", "Unknown feature column(s): missing."),
+        ({"color_by": "missing"}, "color_by", "Unknown color column: missing."),
+    ],
+)
+def test_dimred_get_dimred_preview_rejects_unknown_columns(
+    package, create_with_upload, view_settings, field, message
+):
+    csv_content = b"x,y,label\n1,2,a\n3,4,b\n5,6,c\n"
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", **view_settings)
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict[field] == [message]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.parametrize(
+    ("csv_content", "expected_default", "expected_explicit"),
+    [
+        (
+            b"x,y,color\n1,2,10\n3,4,20\n5,6,30\n",
+            {"numeric_used": ["x", "y"], "categorical_used": []},
+            {"numeric_used": ["x", "y", "color"], "categorical_used": []},
+        ),
+        (
+            b"x,y,color\n1,2,a\n3,4,b\n5,6,a\n",
+            {"numeric_used": ["x", "y"], "categorical_used": []},
+            {"numeric_used": ["x", "y"], "categorical_used": ["color"]},
+        ),
+    ],
+)
+def test_dimred_color_by_is_included_only_when_explicitly_selected(
+    package, create_with_upload, csv_content, expected_default, expected_explicit
+):
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    default_view = _create_dimred_view(resource["id"], method="pca", color_by="color")
+    explicit_view = _create_dimred_view(
+        resource["id"], method="pca", color_by="color", feature_columns=["x", "y", "color"]
+    )
+
+    default_info = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=default_view["id"])["meta"][
+        "prepare_info"
+    ]
+    explicit_info = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=explicit_view["id"])["meta"][
+        "prepare_info"
+    ]
+
+    assert {key: default_info[key] for key in expected_default} == expected_default
+    assert {key: explicit_info[key] for key in expected_explicit} == expected_explicit
+    assert default_info["feature_columns"] == ["x", "y"]
+    assert explicit_info["feature_columns"] == ["x", "y", "color"]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_get_dimred_preview_rejects_explicit_high_cardinality_categorical_feature(
+    package, create_with_upload
+):
+    max_categories = dimred_action.dimred_config.max_categories_for_ohe()
+    rows = ["x,y,color"]
+    rows.extend(f"{index},{index * 2},category-{index}" for index in range(max_categories + 1))
+    resource = create_with_upload("\n".join(rows).encode(), "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(
+        resource["id"], method="pca", feature_columns=["x", "y", "color"], color_by="color"
+    )
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["feature_columns"] == [
+        f"Feature column 'color' has {max_categories + 1} categories; maximum is {max_categories}."
+    ]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
 def test_prepare_info_color_candidates(package, create_with_upload):
     with open(IRIS_CSV, "rb") as csv:
         resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])

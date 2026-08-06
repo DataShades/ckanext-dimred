@@ -44,6 +44,16 @@ can color points by a chosen column and control which columns are used as featur
    `ckanext.dimred.render_backend`), and use “Download embedding (CSV)” to get the
    coordinates.
 
+### Feature and color columns
+
+Every selected feature and `Color by column` must still exist in the resource; a renamed
+or removed column returns a field-specific validation error. A color column is metadata by
+default and is excluded from the embedding features. To use it as an embedding feature too,
+select its checkbox explicitly after choosing it as `Color by`. Categorical feature columns
+must be enabled and stay within the configured category limit; otherwise the preview returns
+a `feature_columns` validation error. Leave all feature checkboxes unselected to use the
+eligible columns automatically.
+
 API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
 embedding/meta.
 

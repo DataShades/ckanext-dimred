@@ -352,8 +352,10 @@ def _prepare_matrix_from_resource(
     color_by, color_values = _extract_color_info(df, resource_view)
     selected_features = _extract_selected_features(df, resource_view)
 
-    numeric_cols = _select_numeric_columns(df, selected_features)
+    numeric_cols = _select_numeric_columns(df, color_by, selected_features)
     categorical_cols = _select_categorical_columns(df, numeric_cols, color_by, selected_features)
+    if not numeric_cols:
+        raise DimredNumericColumnError
     color_candidates = _build_color_candidates(df, color_by, numeric_cols, categorical_cols)
 
     df_features = _build_feature_frame(df, numeric_cols, categorical_cols)
@@ -369,7 +371,7 @@ def _prepare_matrix_from_resource(
         "categorical_used": categorical_cols,
         "color_by": color_by or None,
         "color_values": color_values,
-        "feature_columns": selected_features or None,
+        "feature_columns": numeric_cols + categorical_cols,
         "color_candidates": color_candidates,
     }
 
@@ -404,15 +406,18 @@ def _maybe_limit_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tuple[str, list[str] | None]:
     """Extract color_by and corresponding values."""
     color_by = (resource_view.get("color_by") or "").strip()
-    if color_by and color_by in df.columns:
-        series = df[color_by]
-        kind = _infer_color_kind(series)
-        if kind == "numeric":
-            values, _, _ = _serialize_numeric_values(series)
-        else:
-            values, _ = _serialize_categorical_values(series, dimred_config.max_categories_for_ohe())
-        return color_by, values
-    return "", None
+    if not color_by:
+        return "", None
+    if color_by not in df.columns:
+        raise tk.ValidationError({"color_by": [f"Unknown color column: {color_by}."]})
+
+    series = df[color_by]
+    kind = _infer_color_kind(series)
+    if kind == "numeric":
+        values, _, _ = _serialize_numeric_values(series)
+    else:
+        values, _ = _serialize_categorical_values(series, dimred_config.max_categories_for_ohe())
+    return color_by, values
 
 
 def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) -> list[str]:
@@ -430,16 +435,19 @@ def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) 
         elif isinstance(raw_features, (list, tuple, set)):
             selected = [str(v) for v in raw_features]
 
-    return [c for c in selected if c in df.columns]
+    unknown = sorted(set(selected).difference(df.columns))
+    if unknown:
+        raise tk.ValidationError({"feature_columns": [f"Unknown feature column(s): {', '.join(unknown)}."]})
+    return selected
 
 
-def _select_numeric_columns(df: pd.DataFrame, selected_features: list[str]) -> list[str]:
-    """Return numeric columns, optionally filtered by selected_features."""
+def _select_numeric_columns(df: pd.DataFrame, color_by: str, selected_features: list[str]) -> list[str]:
+    """Return numeric columns, excluding color_by unless explicitly selected."""
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     if selected_features:
         numeric_cols = [c for c in numeric_cols if c in selected_features]
-    if not numeric_cols:
-        raise DimredNumericColumnError
+    elif color_by:
+        numeric_cols = [c for c in numeric_cols if c != color_by]
     return numeric_cols
 
 
@@ -452,20 +460,41 @@ def _select_categorical_columns(
     """Return low-cardinality categorical columns to include."""
     categorical_cols: list[str] = []
     if not dimred_config.enable_categorical():
+        _raise_if_categorical_features_disabled(selected_features, numeric_cols)
         return categorical_cols
 
     max_cat = dimred_config.max_categories_for_ohe()
     for col in df.columns:
         if col in numeric_cols:
             continue
-        if col == color_by:
-            continue
         if selected_features and col not in selected_features:
             continue
+        if not selected_features and col == color_by:
+            continue
         n_unique = df[col].nunique(dropna=True)
-        if 1 < n_unique <= max_cat:
-            categorical_cols.append(col)
+        if not 1 < n_unique <= max_cat:
+            if selected_features:
+                _raise_invalid_categorical_feature(col, n_unique, max_cat)
+            continue
+        categorical_cols.append(col)
     return categorical_cols
+
+
+def _raise_if_categorical_features_disabled(selected_features: list[str], numeric_cols: list[str]) -> None:
+    """Raise when an explicit categorical selection cannot be encoded."""
+    selected_categorical = [col for col in selected_features if col not in numeric_cols]
+    if selected_categorical:
+        names = ", ".join(selected_categorical)
+        raise tk.ValidationError({"feature_columns": [f"Categorical feature columns are disabled: {names}."]})
+
+
+def _raise_invalid_categorical_feature(column: str, n_unique: int, max_categories: int) -> None:
+    """Raise a field-specific error for an explicit unusable categorical column."""
+    if n_unique <= 1:
+        message = f"Feature column '{column}' must contain at least 2 distinct values."
+    else:
+        message = f"Feature column '{column}' has {n_unique} categories; maximum is {max_categories}."
+    raise tk.ValidationError({"feature_columns": [message]})
 
 
 def _build_color_candidates(

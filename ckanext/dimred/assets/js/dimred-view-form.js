@@ -10,6 +10,7 @@ ckan.module("dimred-view-form", function ($, _) {
             this.defaults = this._parseDefaults(this.options.defaults || attrDefaults);
             this.methodSelect = $("#field-method");
             this.paramsField = $("#field-method-params");
+            this.colorSelect = $("#field-color_by");
 
             if (!this.methodSelect.length || !this.paramsField.length) {
                 return;
@@ -21,6 +22,7 @@ ckan.module("dimred-view-form", function ($, _) {
             this.valueByMethod[this.currentMethod] = this._normalizeJson(this.paramsField.val());
 
             this.methodSelect.on("change", this._onMethodChange.bind(this));
+            this.colorSelect.on("change", this._excludeColorFromFeatures.bind(this));
         },
 
         _parseDefaults: function (defaults) {
@@ -68,6 +70,17 @@ ckan.module("dimred-view-form", function ($, _) {
 
             this.currentMethod = newMethod;
             this.currentDefault = this._stringifyDefault(newMethod);
+        },
+
+        _excludeColorFromFeatures: function () {
+            var colorBy = this.colorSelect.val();
+            if (!colorBy) {
+                return;
+            }
+
+            $("#feature-columns-list input").filter(function () {
+                return $(this).val() === colorBy;
+            }).prop("checked", false);
         },
     };
 });

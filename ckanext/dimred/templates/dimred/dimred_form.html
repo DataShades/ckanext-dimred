@@ -30,7 +30,7 @@
     {% set selected_features = selected_features.split(',') %}
 {% endif %}
 {% if not selected_features %}
-    {% set selected_features = feature_options | map(attribute='value') | list %}
+    {% set selected_features = [] %}
 {% endif %}
 
 <div class="form-group control-group">
@@ -59,6 +59,7 @@
     <div class="form-group control-group">
         <label class="form-label">{{ _('Feature columns') }}</label>
         <div class="controls" id="feature-columns-list">
+            <span class="info-block">{{ _('Leave all columns unselected to use eligible columns automatically.') }}</span>
             {% for opt in feature_options %}
                 <div class="checkbox">
                     <label class="dimred-feature-label"
