@@ -54,6 +54,14 @@ must be enabled and stay within the configured category limit; otherwise the pre
 a `feature_columns` validation error. Leave all feature checkboxes unselected to use the
 eligible columns automatically.
 
+### Data quality
+
+Numeric columns with missing or infinite values are imputed before dimensionality reduction.
+Automatic selection skips empty, mixed numeric/text, and datetime columns, listing them in
+`prepare_info.skipped_columns`. Select such a column explicitly to receive a
+`feature_columns` validation error instead. Boolean columns follow the categorical-feature
+setting.
+
 API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
 embedding/meta.
 

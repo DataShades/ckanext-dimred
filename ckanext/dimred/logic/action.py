@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import numpy as np
@@ -30,6 +31,11 @@ METHOD_PARAM_NAMES = {
     "tsne": {"n_components", "perplexity", "random_state"},
     "umap": {"min_dist", "n_components", "n_neighbors", "random_state"},
 }
+
+DATE_LIKE_PATTERN = re.compile(
+    r"(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|"
+    r"\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})(?:[T\s].*)?"
+)
 
 
 @tk.side_effect_free
@@ -352,16 +358,19 @@ def _prepare_matrix_from_resource(
     color_by, color_values = _extract_color_info(df, resource_view)
     selected_features = _extract_selected_features(df, resource_view)
 
-    numeric_cols = _select_numeric_columns(df, color_by, selected_features)
-    categorical_cols = _select_categorical_columns(df, numeric_cols, color_by, selected_features)
+    numeric_cols, categorical_cols, skipped_columns = _select_feature_columns(df, color_by, selected_features)
     if not numeric_cols:
         raise DimredNumericColumnError
     color_candidates = _build_color_candidates(df, color_by, numeric_cols, categorical_cols)
 
     df_features = _build_feature_frame(df, numeric_cols, categorical_cols)
 
-    scaler = StandardScaler()
-    x_matrix = scaler.fit_transform(df_features.values)
+    try:
+        x_matrix = StandardScaler().fit_transform(df_features.values)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"data": [f"Cannot prepare feature data: {err}"]}) from err
+    if not np.isfinite(x_matrix).all():
+        raise tk.ValidationError({"data": ["Feature data must contain only finite values."]})
 
     info: dict[str, Any] = {
         "n_rows_original": n_rows_original,
@@ -372,6 +381,7 @@ def _prepare_matrix_from_resource(
         "color_by": color_by or None,
         "color_values": color_values,
         "feature_columns": numeric_cols + categorical_cols,
+        "skipped_columns": skipped_columns,
         "color_candidates": color_candidates,
     }
 
@@ -441,60 +451,138 @@ def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) 
     return selected
 
 
-def _select_numeric_columns(df: pd.DataFrame, color_by: str, selected_features: list[str]) -> list[str]:
-    """Return numeric columns, excluding color_by unless explicitly selected."""
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if selected_features:
-        numeric_cols = [c for c in numeric_cols if c in selected_features]
-    elif color_by:
-        numeric_cols = [c for c in numeric_cols if c != color_by]
-    return numeric_cols
-
-
-def _select_categorical_columns(
+def _select_feature_columns(
     df: pd.DataFrame,
-    numeric_cols: list[str],
     color_by: str,
     selected_features: list[str],
-) -> list[str]:
-    """Return low-cardinality categorical columns to include."""
+) -> tuple[list[str], list[str], list[dict[str, str]]]:
+    """Classify selected columns and return usable features plus automatic skips."""
+    explicit_selection = bool(selected_features)
+    numeric_cols: list[str] = []
     categorical_cols: list[str] = []
-    if not dimred_config.enable_categorical():
-        _raise_if_categorical_features_disabled(selected_features, numeric_cols)
-        return categorical_cols
+    skipped_columns: list[dict[str, str]] = []
 
-    max_cat = dimred_config.max_categories_for_ohe()
     for col in df.columns:
-        if col in numeric_cols:
+        if explicit_selection and col not in selected_features:
             continue
-        if selected_features and col not in selected_features:
+        if not explicit_selection and col == color_by:
+            skipped_columns.append({"name": col, "reason": "used for color only"})
             continue
-        if not selected_features and col == color_by:
-            continue
-        n_unique = df[col].nunique(dropna=True)
-        if not 1 < n_unique <= max_cat:
-            if selected_features:
-                _raise_invalid_categorical_feature(col, n_unique, max_cat)
-            continue
-        categorical_cols.append(col)
-    return categorical_cols
+
+        kind = _classify_feature_column(df[col])
+        if kind == "numeric":
+            numeric_cols.append(col)
+        elif kind == "categorical":
+            _select_categorical_feature(df[col], col, explicit_selection, categorical_cols, skipped_columns)
+        else:
+            _skip_or_raise_feature(
+                col,
+                kind,
+                explicit_selection,
+                skipped_columns,
+                _unsupported_feature_message(col, kind),
+            )
+
+    return numeric_cols, categorical_cols, skipped_columns
 
 
-def _raise_if_categorical_features_disabled(selected_features: list[str], numeric_cols: list[str]) -> None:
-    """Raise when an explicit categorical selection cannot be encoded."""
-    selected_categorical = [col for col in selected_features if col not in numeric_cols]
-    if selected_categorical:
-        names = ", ".join(selected_categorical)
-        raise tk.ValidationError({"feature_columns": [f"Categorical feature columns are disabled: {names}."]})
+def _classify_feature_column(series: pd.Series) -> str:
+    """Classify a column for feature selection without coercing mixed data."""
+    if pd.api.types.is_bool_dtype(series):
+        return "categorical"
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return "datetime"
+
+    non_null = series.dropna()
+    if non_null.empty:
+        return "empty"
+
+    numeric = pd.to_numeric(series, errors="coerce")
+    finite = numeric.replace([np.inf, -np.inf], np.nan).dropna()
+    if pd.api.types.is_numeric_dtype(series):
+        return "numeric" if not finite.empty else "empty"
+
+    non_null_numeric = pd.to_numeric(non_null, errors="coerce")
+    if non_null_numeric.notna().all():
+        return "numeric" if not finite.empty else "empty"
+    if non_null_numeric.notna().any():
+        return "mixed"
+    if _looks_like_datetime(non_null):
+        return "datetime"
+    return "categorical"
 
 
-def _raise_invalid_categorical_feature(column: str, n_unique: int, max_categories: int) -> None:
-    """Raise a field-specific error for an explicit unusable categorical column."""
+def _looks_like_datetime(values: pd.Series) -> bool:
+    """Recognize common date strings without guessing arbitrary labels."""
+    date_strings = values.astype(str).str.strip()
+    if not date_strings.str.fullmatch(DATE_LIKE_PATTERN).all():
+        return False
+    return bool(pd.to_datetime(date_strings, errors="coerce", format="mixed").notna().all())
+
+
+def _select_categorical_feature(
+    series: pd.Series,
+    column: str,
+    explicit_selection: bool,
+    categorical_cols: list[str],
+    skipped_columns: list[dict[str, str]],
+) -> None:
+    """Add an eligible categorical feature or report why it cannot be used."""
+    if not dimred_config.enable_categorical():
+        _skip_or_raise_feature(
+            column,
+            "categorical-disabled",
+            explicit_selection,
+            skipped_columns,
+            f"Feature column '{column}' cannot be used because categorical features are disabled.",
+        )
+        return
+
+    n_unique = series.nunique(dropna=True)
+    max_categories = dimred_config.max_categories_for_ohe()
     if n_unique <= 1:
-        message = f"Feature column '{column}' must contain at least 2 distinct values."
-    else:
-        message = f"Feature column '{column}' has {n_unique} categories; maximum is {max_categories}."
-    raise tk.ValidationError({"feature_columns": [message]})
+        _skip_or_raise_feature(
+            column,
+            "fewer than 2 distinct values",
+            explicit_selection,
+            skipped_columns,
+            f"Feature column '{column}' must contain at least 2 distinct values.",
+        )
+        return
+    if n_unique > max_categories:
+        _skip_or_raise_feature(
+            column,
+            "too many categories",
+            explicit_selection,
+            skipped_columns,
+            f"Feature column '{column}' has {n_unique} categories; maximum is {max_categories}.",
+        )
+        return
+
+    categorical_cols.append(column)
+
+
+def _skip_or_raise_feature(
+    column: str,
+    reason: str,
+    explicit_selection: bool,
+    skipped_columns: list[dict[str, str]],
+    message: str,
+) -> None:
+    """Raise for an explicit unusable column, otherwise record an automatic skip."""
+    if explicit_selection:
+        raise tk.ValidationError({"feature_columns": [message]})
+    skipped_columns.append({"name": column, "reason": reason})
+
+
+def _unsupported_feature_message(column: str, kind: str) -> str:
+    """Return a short field-specific error for unsupported feature data."""
+    messages = {
+        "empty": f"Feature column '{column}' has no finite values.",
+        "mixed": f"Feature column '{column}' contains mixed numeric and text values.",
+        "datetime": f"Feature column '{column}' is a datetime column, which is not supported.",
+    }
+    return messages[kind]
 
 
 def _build_color_candidates(
@@ -594,7 +682,7 @@ def _serialize_categorical_values(series: pd.Series, unique_limit: int) -> tuple
 def _serialize_numeric_values(series: pd.Series) -> tuple[list[Any], float | None, float | None]:
     """Return numeric values + min/max for a series."""
     numeric = pd.to_numeric(series, errors="coerce")
-    values = [None if pd.isna(v) else float(v) for v in numeric.tolist()]
+    values = [None if pd.isna(v) or not np.isfinite(v) else float(v) for v in numeric.tolist()]
 
     finite_values = [v for v in values if v is not None and np.isfinite(v)]
     if not finite_values:
@@ -606,18 +694,24 @@ def _serialize_numeric_values(series: pd.Series) -> tuple[list[Any], float | Non
 
 
 def _build_feature_frame(df: pd.DataFrame, numeric_cols: list[str], categorical_cols: list[str]) -> pd.DataFrame:
-    """Assemble feature frame with one-hot encoding and basic cleaning."""
-    feature_cols = numeric_cols + categorical_cols
-    df_features = df[feature_cols].copy()
-
-    if categorical_cols:
-        df_features = pd.get_dummies(df_features, columns=categorical_cols, dummy_na=False, drop_first=False)
-
-    df_features = df_features.astype(float)
-    df_features = df_features.fillna(df_features.mean())
-    df_features = df_features.fillna(0.0)
+    """Assemble a finite feature frame with numeric imputation and categorical encoding."""
+    try:
+        feature_cols = numeric_cols + categorical_cols
+        df_features = df[feature_cols].copy()
+        if numeric_cols:
+            numeric = df_features[numeric_cols].apply(pd.to_numeric, errors="coerce")
+            df_features[numeric_cols] = numeric.replace([np.inf, -np.inf], np.nan)
+        if categorical_cols:
+            df_features = pd.get_dummies(df_features, columns=categorical_cols, dummy_na=False, drop_first=False)
+        df_features = df_features.astype(float)
+        df_features = df_features.fillna(df_features.mean())
+        df_features = df_features.fillna(0.0)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"data": [f"Cannot prepare feature data: {err}"]}) from err
 
     if df_features.shape[1] < 2:  # noqa PLR2004
         raise DimredFeatureError
+    if not np.isfinite(df_features.to_numpy(dtype=float)).all():
+        raise tk.ValidationError({"data": ["Feature data must contain only finite values."]})
 
     return df_features

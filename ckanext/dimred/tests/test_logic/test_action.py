@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import pathlib
 
+import numpy as np
 import pytest
 
 import ckan.plugins.toolkit as tk
@@ -276,6 +278,68 @@ def test_dimred_get_dimred_preview_rejects_explicit_high_cardinality_categorical
     assert excinfo.value.error_dict["feature_columns"] == [
         f"Feature column 'color' has {max_categories + 1} categories; maximum is {max_categories}."
     ]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_get_dimred_preview_normalizes_numeric_gaps_and_skips_unsupported_columns(
+    package, create_with_upload
+):
+    csv_content = (
+        b"x,y,color,empty,mixed,when,flag\n"
+        b"1,2,10,,1,2024-01-01,true\n"
+        b",inf,inf,,oops,2024-01-02,false\n"
+        b"3,4,30,,3,2024-01-03,true\n"
+    )
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", color_by="color")
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    info = result["meta"]["prepare_info"]
+    assert np.isfinite(np.asarray(result["embedding"])).all()
+    json.dumps(result, allow_nan=False)
+    assert info["numeric_used"] == ["x", "y"]
+    assert info["categorical_used"] == ["flag"]
+    assert info["color_values"] == [10.0, None, 30.0]
+    assert info["skipped_columns"] == [
+        {"name": "color", "reason": "used for color only"},
+        {"name": "empty", "reason": "empty"},
+        {"name": "mixed", "reason": "mixed"},
+        {"name": "when", "reason": "datetime"},
+    ]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.parametrize(
+    ("csv_content", "column", "message"),
+    [
+        (
+            b"x,y,mixed\n1,2,1\n3,4,oops\n5,6,3\n",
+            "mixed",
+            "Feature column 'mixed' contains mixed numeric and text values.",
+        ),
+        (
+            b"x,y,when\n1,2,31/01/2024\n3,4,01/02/2024\n5,6,02/03/2024\n",
+            "when",
+            "Feature column 'when' is a datetime column, which is not supported.",
+        ),
+        (
+            b"x,y,empty\n1,2,\n3,4,\n5,6,\n",
+            "empty",
+            "Feature column 'empty' has no finite values.",
+        ),
+    ],
+)
+def test_dimred_get_dimred_preview_rejects_explicit_unsupported_feature_columns(
+    package, create_with_upload, csv_content, column, message
+):
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", feature_columns=["x", "y", column])
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["feature_columns"] == [message]
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
