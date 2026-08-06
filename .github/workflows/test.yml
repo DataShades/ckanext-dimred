@@ -43,3 +43,48 @@ jobs:
         ckan -c test.ini db init
     - name: Run tests
       run: pytest --ckan-ini=test.ini --cov=ckanext.dimred --disable-warnings ckanext/dimred
+    - name: Build and verify release wheel
+      if: matrix.ckan-version == '2.11'
+      run: |
+        python -m build
+        python - <<'PY'
+        import email
+        import pathlib
+        import zipfile
+
+        wheels = list(pathlib.Path("dist").glob("*.whl"))
+        assert len(wheels) == 1, wheels
+
+        with zipfile.ZipFile(wheels[0]) as archive:
+            names = set(archive.namelist())
+            metadata_path = next(name for name in names if name.endswith(".dist-info/METADATA"))
+            metadata = email.message_from_bytes(archive.read(metadata_path))
+
+        required = {
+            "ckanext/dimred/config_declaration.yaml",
+            "ckanext/dimred/assets/webassets.yml",
+            "ckanext/dimred/templates/dimred/dimred_preview.html",
+        }
+        assert required <= names, required - names
+        assert not any("/tests/" in name or name.endswith("/.gitignore") for name in names)
+        assert metadata["Summary"]
+        assert metadata["License-Expression"] == "AGPL-3.0-or-later"
+        requirements = metadata.get_all("Requires-Dist")
+        assert any(item.startswith("openpyxl>=3.1") for item in requirements)
+        assert any(item.startswith("xlrd>=2.0") for item in requirements)
+        PY
+        pip install --force-reinstall --no-deps dist/*.whl
+        ckan -c test.ini config describe dimred --format json
+        cd /tmp
+        python - <<'PY'
+        import importlib.metadata
+        import pathlib
+
+        distribution = importlib.metadata.distribution("ckanext-dimred")
+        package_root = pathlib.Path(distribution.locate_file("ckanext"))
+
+        import ckanext.dimred.plugin as plugin
+
+        assert pathlib.Path(plugin.__file__).is_relative_to(package_root)
+        assert package_root.joinpath("dimred/config_declaration.yaml").is_file()
+        PY

@@ -144,13 +144,10 @@ def test_prepare_info_color_candidates(package, create_with_upload):
 @pytest.mark.usefixtures("clean_db", "with_plugins")
 def test_color_candidates_respect_cardinality_limits(package, create_with_upload):
     rows = ["num1,num2,color_col,low_cat,high_cat"]
-    for idx in range(60):
-        rows.append(f"{idx},{idx * 2},label{idx},group{idx % 2},skip{idx}")
+    rows.extend(f"{idx},{idx * 2},label{idx},group{idx % 2},skip{idx}" for idx in range(60))
     csv_content = "\n".join(rows)
 
-    resource = create_with_upload(
-        csv_content.encode("utf-8"), "colors.csv", format="csv", package_id=package["id"]
-    )
+    resource = create_with_upload(csv_content.encode("utf-8"), "colors.csv", format="csv", package_id=package["id"])
 
     view = call_action(
         "resource_view_create",

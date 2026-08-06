@@ -1,6 +1,4 @@
-include README.rst
+include README.md
 include LICENSE
-include requirements.txt
-recursive-include ckanext/dimred *.html *.json *.js *.less *.css *.mo *.yml
-recursive-include ckanext/dimred/migration *.ini *.py *.mako
-recursive-include ckanext/dimred/public *.*
+recursive-include ckanext/dimred *.html *.js *.css *.yml *.yaml
+prune ckanext/dimred/tests

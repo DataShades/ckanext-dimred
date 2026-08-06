@@ -1,14 +1,14 @@
 [build-system]
-requires = ["setuptools>=61.2"]
+requires = ["babel>=2.12", "setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ckanext-dimred"
 version = "0.0.1"
-description = ""
+description = "CKAN resource view for dimensionality reduction and visualization of tabular data"
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -20,6 +20,8 @@ dependencies = [
     "matplotlib>=3.10.7",
     "umap-learn>=0.5.9",
     "scikit-learn>=1.4.0",
+    "openpyxl>=3.1",
+    "xlrd>=2.0",
 ]
 authors = [
     {name = "DataShades", email = "datashades@linkdigital.com.au"},
@@ -28,22 +30,25 @@ authors = [
 maintainers = [
     {name = "DataShades", email = "datashades@linkdigital.com.au"},
 ]
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 
 [project.readme]
 file = "README.md"
 content-type = "text/markdown"
 
-[project.license]
-text = "AGPL"
-
 [project.urls]
 Homepage = "https://github.com/DataShades/ckanext-dimred"
 
 [project.optional-dependencies]
-dev = ["pytest-ckan"]
+dev = ["build>=1.2", "pytest-ckan"]
 
 [project.entry-points."ckan.plugins"]
 dimred = "ckanext.dimred.plugin:DimredPlugin"
+
+[tool.setuptools.packages.find]
+include = ["ckanext*"]
+exclude = ["ckanext.dimred.tests*"]
 
 
 [tool.ruff]
@@ -127,10 +132,10 @@ filterwarnings = [
 extraPaths = [
            "../ckan"
 ]
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 include = ["ckanext"]
 exclude = [
-    # "**/test*",
+    "**/test*",
     "**/migration",
 ]
 strict = []

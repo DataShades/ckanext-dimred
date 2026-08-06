@@ -162,8 +162,7 @@ do:
 
     git clone https://github.com/DataShades/ckanext-dimred.git
     cd ckanext-dimred
-    pip install -e .
-    pip install -r dev-requirements.txt
+    pip install -e '.[dev]'
 
 ## Tests
 

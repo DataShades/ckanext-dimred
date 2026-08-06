@@ -7,7 +7,7 @@ from ckanext.dimred.adapters import tabular
 
 
 @pytest.mark.usefixtures("with_plugins")
-def test_tabular_adapter_reads_csv(tmp_path, monkeypatch):
+def test_tabular_adapter_reads_csv(tmp_path):
     csv_path = tmp_path / "data.csv"
     csv_path.write_text("a,b\n1,2\n3,4\n", encoding="utf-8")
 
@@ -22,6 +22,22 @@ def test_tabular_adapter_reads_csv(tmp_path, monkeypatch):
     assert isinstance(df, pd.DataFrame)
     assert df.shape == (2, 2)
     assert list(df.columns) == ["a", "b"]
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_tabular_adapter_reads_xlsx(tmp_path):
+    xlsx_path = tmp_path / "data.xlsx"
+    pd.DataFrame({"a": [1, 3], "b": [2, 4]}).to_excel(xlsx_path, index=False)
+
+    adapter = tabular.TabularAdapter(
+        {"format": "xlsx", "size": xlsx_path.stat().st_size},
+        {},
+        filepath=str(xlsx_path),
+    )
+
+    df = adapter.get_dataframe()
+
+    assert df.to_dict(orient="list") == {"a": [1, 3], "b": [2, 4]}
 
 
 @pytest.mark.usefixtures("with_plugins")
