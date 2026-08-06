@@ -18,6 +18,17 @@ from ckanext.dimred.logic import action as dimred_action
 IRIS_CSV = pathlib.Path(__file__).resolve().parent.parent / "data" / "iris.csv"
 
 
+def _create_dimred_view(resource_id, **settings):
+    return call_action(
+        "resource_view_create",
+        {},
+        resource_id=resource_id,
+        view_type="dimred_view",
+        title="Dimred",
+        **settings,
+    )
+
+
 @pytest.mark.usefixtures("clean_db", "with_plugins")
 def test_dimred_get_dimred_preview_runs_pipeline(package, create_with_upload):
     with open(IRIS_CSV, "rb") as csv:
@@ -59,6 +70,88 @@ def test_dimred_get_dimred_preview_pca(package, create_with_upload):
     result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
 
     assert result["meta"]["method"] == "pca"
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_get_dimred_preview_tsne(package, create_with_upload):
+    with open(IRIS_CSV, "rb") as csv:
+        resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
+
+    view = _create_dimred_view(resource["id"], method="tsne", method_params={"perplexity": 5})
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert result["meta"]["method"] == "tsne"
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_get_dimred_preview_rejects_view_from_another_resource(package, create_with_upload):
+    csv_content = b"x,y\n1,2\n3,4\n4,5\n"
+    resource = create_with_upload(csv_content, "first.csv", format="csv", package_id=package["id"])
+    other_resource = create_with_upload(csv_content, "second.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(other_resource["id"], method="pca")
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["view_id"] == ["Resource view does not belong to the specified resource."]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_get_dimred_preview_rejects_unknown_method_parameter(package, create_with_upload):
+    csv_content = b"x,y\n1,2\n3,4\n4,5\n"
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", method_params={"unexpected": 1})
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["method_params"] == ["Unsupported pca parameter(s): unexpected."]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.parametrize(
+    ("method", "method_params", "message"),
+    [
+        ("pca", {"whiten": "true"}, "whiten must be a boolean."),
+        ("tsne", {"perplexity": 0}, "perplexity must be greater than 0."),
+        ("umap", {"n_neighbors": 2.5}, "n_neighbors must be an integer of at least 2."),
+        ("umap", {"min_dist": 1.1}, "min_dist must be between 0 and 1."),
+    ],
+)
+def test_dimred_get_dimred_preview_rejects_invalid_method_parameters(
+    package, create_with_upload, method, method_params, message
+):
+    csv_content = b"x,y\n1,2\n3,4\n4,5\n"
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method=method, method_params=method_params)
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["method_params"] == [message]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.parametrize(
+    ("method", "method_params", "message"),
+    [
+        ("pca", {"n_components": 3}, "PCA n_components cannot exceed the number of rows or features."),
+        ("tsne", {}, "t-SNE perplexity must be smaller than the number of rows."),
+        ("umap", {"n_neighbors": 3}, "UMAP n_neighbors must be smaller than the number of rows."),
+    ],
+)
+def test_dimred_get_dimred_preview_rejects_parameters_incompatible_with_data(
+    package, create_with_upload, method, method_params, message
+):
+    csv_content = b"x,y\n1,2\n3,4\n4,5\n"
+    resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method=method, method_params=method_params)
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["method_params" if method != "pca" else "n_components"] == [message]
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")

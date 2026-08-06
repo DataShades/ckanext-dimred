@@ -101,7 +101,13 @@ class DimredPlugin(p.SingletonPlugin):
             else:
                 image_data_url = None
             error = None
-        except (DimredError, tk.ValidationError, tk.NotAuthorized) as exc:
+        except tk.ValidationError as exc:
+            image_data_url = None
+            embedding = None
+            meta = {}
+            summary = {}
+            error = _format_validation_error(exc)
+        except (DimredError, tk.NotAuthorized) as exc:
             image_data_url = None
             embedding = None
             meta = {}
@@ -144,6 +150,17 @@ def _raise_if_error(result: dict[str, Any] | None) -> None:
         raise DimredPreviewError
     if result.get("error"):
         raise DimredPreviewError(str(result["error"]))
+
+
+def _format_validation_error(error: tk.ValidationError) -> str:
+    """Return validation messages suitable for rendering in the resource view."""
+    messages: list[str] = []
+    for field_errors in error.error_dict.values():
+        if isinstance(field_errors, list):
+            messages.extend(str(message) for message in field_errors)
+        else:
+            messages.append(str(field_errors))
+    return " ".join(messages) or tk._("Invalid dimensionality reduction settings.")
 
 
 def _resource_data_changed(current: dict[str, Any] | None, resource: dict[str, Any]) -> bool:

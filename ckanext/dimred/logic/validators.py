@@ -99,6 +99,9 @@ def dimred_n_components(value: Any, context: types.Context) -> int | Any:
     if value in (None, ""):
         return value
 
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        raise tk.Invalid(tk._("n_components must be an integer (2 or 3)."))
+
     try:
         parsed = int(value)
     except (TypeError, ValueError) as err:

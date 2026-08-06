@@ -57,3 +57,11 @@ def test_method_params_object_rejects_invalid_json():
         validator("{bad json}", {})
     with pytest.raises(tk.Invalid):
         validator("[1, 2]", {})
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_n_components_rejects_fractional_value():
+    validator = tk.get_validator("dimred_n_components")
+
+    with pytest.raises(tk.Invalid):
+        validator(2.5, {})

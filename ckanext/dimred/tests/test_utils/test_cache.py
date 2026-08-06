@@ -42,7 +42,7 @@ def test_pipeline_uses_cache(monkeypatch):
 
     ctx = {"ignore_auth": True}
     resource = {"id": "r1", "format": "csv"}
-    view = {"id": "v1", "method": "umap"}
+    view = {"id": "v1", "resource_id": "r1", "method": "umap"}
 
     result1 = dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view})
     result2 = dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view})
@@ -69,8 +69,8 @@ def test_cache_signature_changes_with_method(monkeypatch):
 
     ctx = {"ignore_auth": True}
     resource = {"id": "r1", "format": "csv"}
-    view_umap = {"id": "v1", "method": "umap"}
-    view_tsne = {"id": "v1", "method": "tsne"}
+    view_umap = {"id": "v1", "resource_id": "r1", "method": "umap"}
+    view_tsne = {"id": "v1", "resource_id": "r1", "method": "tsne"}
 
     res_umap = dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view_umap})
     res_tsne = dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view_tsne})

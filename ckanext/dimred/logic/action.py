@@ -23,6 +23,14 @@ from ckanext.dimred.methods import BaseProjectionMethod, get_projection_method
 from ckanext.dimred.utils import cache as dimred_cache
 from ckanext.dimred.utils.export import embedding_to_csv
 
+__all__ = ["dimred_get_dimred_preview", "dimred_export_embedding"]
+
+METHOD_PARAM_NAMES = {
+    "pca": {"n_components", "random_state", "whiten"},
+    "tsne": {"n_components", "perplexity", "random_state"},
+    "umap": {"min_dist", "n_components", "n_neighbors", "random_state"},
+}
+
 
 @tk.side_effect_free
 @validate(schema.dimred_get_dimred_preview_schema)
@@ -61,6 +69,7 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
 
     resource_id = resource["id"]
     resource_view_id = resource_view["id"]
+    _validate_resource_view_resource(resource, resource_view)
 
     method_params = _parse_method_params(resource_view.get("method_params"))
     resource_view = dict(resource_view)
@@ -119,18 +128,31 @@ def _build_dimred_preview(
     if method_name not in allowed_methods:
         raise tk.ValidationError({"method": [f"Method '{method_name}' is not allowed."]})
 
-    method_cls = get_projection_method(method_name)
+    try:
+        method_cls = get_projection_method(method_name)
+    except KeyError as err:
+        raise tk.ValidationError({"method": [f"Method '{method_name}' is not supported."]}) from err
+
     method_params = _parse_method_params(resource_view.get("method_params"))
     n_components = _parse_n_components(resource_view.get("n_components"))
     if n_components is not None:
         method_params = dict(method_params)
         method_params["n_components"] = n_components
 
-    reducer: BaseProjectionMethod = method_cls(**method_params)
+    method_params = _validate_method_params(method_name, method_params)
+
+    try:
+        reducer: BaseProjectionMethod = method_cls(**method_params)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"method_params": [f"Invalid {method_name} parameters: {err}"]}) from err
 
     x_matrix, prepare_info = _prepare_matrix_from_resource(resource, resource_view)
+    _validate_matrix_compatibility(method_name, reducer.params, x_matrix)
 
-    embedding = reducer.fit_transform(x_matrix)
+    try:
+        embedding = reducer.fit_transform(x_matrix)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"data": [f"Cannot run {method_name}: {err}"]}) from err
 
     meta: dict[str, Any] = {
         "method": method_name,
@@ -178,10 +200,129 @@ def _parse_method_params(raw_params: str | dict[str, Any] | None) -> dict[str, A
     return parsed
 
 
+def _validate_resource_view_resource(resource: dict[str, Any], resource_view: dict[str, Any]) -> None:
+    """Ensure a resource view is used only with its own resource."""
+    view_resource_id = resource_view.get("resource_id")
+    if view_resource_id != resource.get("id"):
+        raise tk.ValidationError({"view_id": ["Resource view does not belong to the specified resource."]})
+
+
+def _validate_method_params(method_name: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Validate and normalize method-specific parameters from resource view JSON."""
+    allowed = METHOD_PARAM_NAMES[method_name]
+    unknown = sorted(set(params).difference(allowed))
+    if unknown:
+        names = ", ".join(unknown)
+        raise tk.ValidationError({"method_params": [f"Unsupported {method_name} parameter(s): {names}."]})
+
+    normalized = dict(params)
+    if "n_components" in normalized:
+        normalized["n_components"] = _parse_n_components(normalized["n_components"])
+    if "random_state" in normalized:
+        normalized["random_state"] = _parse_non_negative_int(normalized["random_state"], "random_state")
+
+    if method_name == "pca" and "whiten" in normalized:
+        normalized["whiten"] = _parse_bool(normalized["whiten"], "whiten")
+    if method_name == "tsne" and "perplexity" in normalized:
+        normalized["perplexity"] = _parse_positive_float(normalized["perplexity"], "perplexity")
+    if method_name == "umap":
+        if "n_neighbors" in normalized:
+            normalized["n_neighbors"] = _parse_int_at_least(normalized["n_neighbors"], "n_neighbors", 2)
+        if "min_dist" in normalized:
+            normalized["min_dist"] = _parse_float_between(normalized["min_dist"], "min_dist", 0, 1)
+
+    return normalized
+
+
+def _validate_matrix_compatibility(
+    method_name: str,
+    params: dict[str, Any],
+    x_matrix: np.ndarray,
+) -> None:
+    """Reject method settings that cannot work with the prepared feature matrix."""
+    n_rows, n_features = x_matrix.shape
+    if n_rows < 2:  # noqa PLR2004
+        raise tk.ValidationError({"data": ["At least 2 data rows are required for dimensionality reduction."]})
+
+    n_components = params["n_components"]
+    if method_name == "pca" and n_components > min(n_rows, n_features):
+        raise tk.ValidationError(
+            {"n_components": ["PCA n_components cannot exceed the number of rows or features."]}
+        )
+    if method_name == "tsne" and params["perplexity"] >= n_rows:
+        raise tk.ValidationError({"method_params": ["t-SNE perplexity must be smaller than the number of rows."]})
+    if method_name == "umap" and params["n_neighbors"] >= n_rows:
+        raise tk.ValidationError({"method_params": ["UMAP n_neighbors must be smaller than the number of rows."]})
+
+
+def _parse_bool(value: Any, name: str) -> bool:
+    """Parse a strict JSON boolean parameter."""
+    if isinstance(value, bool):
+        return value
+    raise tk.ValidationError({"method_params": [f"{name} must be a boolean."]})
+
+
+def _parse_non_negative_int(value: Any, name: str) -> int:
+    """Parse a non-negative integer method parameter."""
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        raise tk.ValidationError({"method_params": [f"{name} must be a non-negative integer."]})
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"method_params": [f"{name} must be a non-negative integer."]}) from err
+    if parsed < 0:
+        raise tk.ValidationError({"method_params": [f"{name} must be a non-negative integer."]})
+    return parsed
+
+
+def _parse_int_at_least(value: Any, name: str, minimum: int) -> int:
+    """Parse an integer method parameter with a lower bound."""
+    if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        raise tk.ValidationError({"method_params": [f"{name} must be an integer of at least {minimum}."]})
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"method_params": [f"{name} must be an integer of at least {minimum}."]}) from err
+    if parsed < minimum:
+        raise tk.ValidationError({"method_params": [f"{name} must be an integer of at least {minimum}."]})
+    return parsed
+
+
+def _parse_positive_float(value: Any, name: str) -> float:
+    """Parse a strictly positive float method parameter."""
+    parsed = _parse_float(value, name)
+    if parsed <= 0:
+        raise tk.ValidationError({"method_params": [f"{name} must be greater than 0."]})
+    return parsed
+
+
+def _parse_float_between(value: Any, name: str, minimum: float, maximum: float) -> float:
+    """Parse a finite float method parameter within an inclusive range."""
+    parsed = _parse_float(value, name)
+    if not minimum <= parsed <= maximum:
+        raise tk.ValidationError({"method_params": [f"{name} must be between {minimum:g} and {maximum:g}."]})
+    return parsed
+
+
+def _parse_float(value: Any, name: str) -> float:
+    """Parse a finite float method parameter."""
+    if isinstance(value, bool):
+        raise tk.ValidationError({"method_params": [f"{name} must be a number."]})
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"method_params": [f"{name} must be a number."]}) from err
+    if not np.isfinite(parsed):
+        raise tk.ValidationError({"method_params": [f"{name} must be a finite number."]})
+    return parsed
+
+
 def _parse_n_components(raw_value: Any) -> int | None:
     """Parse n_components value (allow only 2 or 3)."""
     if raw_value in (None, ""):
         return None
+    if isinstance(raw_value, bool) or (isinstance(raw_value, float) and not raw_value.is_integer()):
+        raise tk.ValidationError({"n_components": ["n_components must be 2 or 3."]})
     try:
         parsed = int(raw_value)
     except (TypeError, ValueError) as err:
