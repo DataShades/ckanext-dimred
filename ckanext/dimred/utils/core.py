@@ -4,9 +4,9 @@ import base64
 import io
 import logging
 import math
+from importlib import import_module
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 import ckan.plugins.toolkit as tk
@@ -56,6 +56,8 @@ def get_adapter_for_resource(
 
 def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> str:
     """Render a 2D/3D scatter plot for the embedding and return a data URL."""
+    plt = import_module("matplotlib.pyplot")
+
     if embedding.shape[1] < 2:  # noqa PLR2004
         raise DimredEmbeddingError
 
@@ -71,9 +73,9 @@ def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> st
     colors = _compute_colors(color_by, color_values, len(xs))
 
     if is_3d:
-        fig, ax = _make_3d_figure(xs, ys, zs, colors)
+        fig, ax = _make_3d_figure(plt, xs, ys, zs, colors)
     else:
-        fig, ax = _make_2d_figure(xs, ys, colors)
+        fig, ax = _make_2d_figure(plt, xs, ys, colors)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png")
@@ -121,7 +123,7 @@ def _axis_ticks(values: np.ndarray, n: int = 5) -> tuple[list[float], tuple[floa
     return ticks, (vmin, vmax)
 
 
-def _make_3d_figure(xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, colors: list[str] | str):
+def _make_3d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, colors: list[str] | str):
     """Build a styled 3D matplotlib figure."""
     fig = plt.figure(figsize=(5, 4), dpi=100)
     ax = fig.add_subplot(111, projection="3d")
@@ -148,7 +150,7 @@ def _make_3d_figure(xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, colors: list
     return fig, ax
 
 
-def _make_2d_figure(xs: np.ndarray, ys: np.ndarray, colors: list[str] | str):
+def _make_2d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, colors: list[str] | str):
     """Build a styled 2D matplotlib figure."""
     fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
     for spine in ax.spines.values():

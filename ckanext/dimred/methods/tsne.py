@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 from typing import Any
 
 import numpy as np
-from sklearn.manifold import TSNE
 
 from ckanext.dimred import config as dimred_config
 from ckanext.dimred.methods.base import BaseProjectionMethod
@@ -20,7 +20,8 @@ class TSNEProjection(BaseProjectionMethod):
     def __init__(self, **params: Any) -> None:
         super().__init__(**params)
 
-        self._reducer = TSNE(
+        tsne = import_module("sklearn.manifold").TSNE
+        self._reducer = tsne(
             n_components=self.params["n_components"],
             perplexity=self.params["perplexity"],
             random_state=self.params.get("random_state", 42),

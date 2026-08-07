@@ -543,7 +543,8 @@ def test_dimred_export_embedding(package, create_with_upload):
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
-@pytest.mark.ckan_config("ckanext.dimred.max_rows", 2)
+@pytest.mark.ckan_config("ckanext.dimred.max_rows", 4)
+@pytest.mark.ckan_config("ckanext.dimred.pca.max_rows", 2)
 def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(package, create_with_upload):
     csv_content = b"x,y,label\n1,11,row-1\n2,12,row-2\n3,13,row-3\n4,14,row-4\n"
     resource = create_with_upload(csv_content, "rows.csv", format="csv", package_id=package["id"])
@@ -554,6 +555,7 @@ def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(packa
 
     assert prepare_info["n_rows_original"] == 4
     assert prepare_info["n_rows_used"] == 2
+    assert prepare_info["row_limit"] == 2
     assert set(zip(prepare_info["source_row_ids"], prepare_info["color_values"], strict=True)) == {
         (2, "row-2"),
         (4, "row-4"),
@@ -594,6 +596,30 @@ def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_uploa
 
     assert rows[0] == ["x", "y", "source_row_id", "label"]
     assert [row[2:] for row in rows[1:]] == [["1", "row-1"], ["2", "row-2"], ["3", "row-3"]]
+
+
+@pytest.mark.usefixtures("clean_datastore", "with_plugins")
+@pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
+@pytest.mark.ckan_config("ckanext.dimred.max_rows", 4)
+@pytest.mark.ckan_config("ckanext.dimred.pca.max_rows", 2)
+def test_dimred_preview_passes_method_limit_to_datastore(package, create_with_upload):
+    resource = create_with_upload(b"x,y\n", "rows.csv", format="csv", package_id=package["id"])
+    call_action(
+        "datastore_create",
+        {},
+        resource_id=resource["id"],
+        force=True,
+        records=[{"x": 1, "y": 11}, {"x": 2, "y": 12}, {"x": 3, "y": 13}],
+    )
+    view = _create_dimred_view(resource["id"], method="pca")
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    prepare_info = result["meta"]["prepare_info"]
+
+    assert prepare_info["n_rows_original"] == 3
+    assert prepare_info["n_rows_used"] == 2
+    assert prepare_info["row_limit"] == 2
+    assert prepare_info["source_row_ids"] == [1, 2]
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")

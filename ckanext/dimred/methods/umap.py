@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 from typing import Any
 
 import numpy as np
-import umap
 
 from ckanext.dimred import config as dimred_config
 from ckanext.dimred.methods.base import BaseProjectionMethod
@@ -20,7 +20,8 @@ class UMAPProjection(BaseProjectionMethod):
     def __init__(self, **params: Any) -> None:
         super().__init__(**params)
 
-        self._reducer = umap.UMAP(
+        reducer = import_module("umap").UMAP
+        self._reducer = reducer(
             n_neighbors=self.params["n_neighbors"],
             min_dist=self.params["min_dist"],
             n_components=self.params["n_components"],

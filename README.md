@@ -137,7 +137,7 @@ General defaults:
 - `ckanext.dimred.default_method` (default: `umap`)
 - `ckanext.dimred.allowed_methods` (default: `umap tsne pca`)
 - `ckanext.dimred.max_file_size_mb` (default: `50`)
-- `ckanext.dimred.max_rows` (default: `50000`)
+- `ckanext.dimred.max_rows` (default: `50000`; global upper bound for every method)
 - `ckanext.dimred.enable_categorical` (default: `true`)
 - `ckanext.dimred.max_categories_for_ohe` (default: `30`)
 - `ckanext.dimred.export_enabled` (default: `true`)
@@ -153,16 +153,23 @@ UMAP defaults:
 - `ckanext.dimred.umap.n_neighbors` (default: `15`)
 - `ckanext.dimred.umap.min_dist` (default: `0.1`)
 - `ckanext.dimred.umap.n_components` (default: `2`)
+- `ckanext.dimred.umap.max_rows` (default: `10000`)
 
 t-SNE defaults:
 
 - `ckanext.dimred.tsne.perplexity` (default: `30`)
 - `ckanext.dimred.tsne.n_components` (default: `2`)
+- `ckanext.dimred.tsne.max_rows` (default: `2000`)
 
 PCA defaults:
 
 - `ckanext.dimred.pca.n_components` (default: `2`)
 - `ckanext.dimred.pca.whiten` (default: `false`)
+- `ckanext.dimred.pca.max_rows` (default: `50000`)
+
+For every preview, dimred uses the lower of `ckanext.dimred.max_rows` and the
+selected method's `*.max_rows`. DataStore receives that limit through CKAN's
+`datastore_search`; file resources use deterministic sampling after loading.
 
 Example:
 
@@ -171,6 +178,7 @@ ckan.plugins = ... dimred
 
 ckanext.dimred.allowed_methods = umap
 ckanext.dimred.max_rows = 10000
+ckanext.dimred.umap.max_rows = 10000
 ckanext.dimred.enable_categorical = true
 ```
 

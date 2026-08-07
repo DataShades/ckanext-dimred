@@ -47,6 +47,7 @@ def test_cache_settings_include_pipeline_schema_version():
 
     assert settings["pipeline_schema_version"] == dimred_action.PIPELINE_SCHEMA_VERSION
     assert settings["method_params"]["n_neighbors"] == 15
+    assert settings["effective_max_rows"] == 10000
     assert settings["embedding_decimals"] == dimred_config.embedding_decimals()
 
 
@@ -181,6 +182,26 @@ def test_cache_signature_changes_with_embedding_decimals(monkeypatch):
     dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
 
     assert calls["count"] == 2
+    assert len(fake_cache.store) == 2
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_cache_signature_changes_with_effective_row_limit(monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
+
+    def fake_build(resource, resource_view, context):
+        return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "prepare_info": {}}
+
+    monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
+
+    context = {"ignore_auth": True}
+    resource = _upload_resource()
+    view = {"id": "v1", "resource_id": "r1", "method": "tsne"}
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+    monkeypatch.setitem(tk.config, dimred_config.TSNE_MAX_ROWS, 1000)
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+
     assert len(fake_cache.store) == 2
 
 

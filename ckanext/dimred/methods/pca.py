@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from importlib import import_module
 from typing import Any
 
 import numpy as np
-from sklearn.decomposition import PCA
 
 from ckanext.dimred import config as dimred_config
 from ckanext.dimred.methods.base import BaseProjectionMethod
@@ -16,7 +16,8 @@ class PCAProjection(BaseProjectionMethod):
 
     def __init__(self, **params: Any) -> None:
         super().__init__(**params)
-        self._reducer = PCA(
+        pca = import_module("sklearn.decomposition").PCA
+        self._reducer = pca(
             n_components=self.params["n_components"],
             whiten=self.params.get("whiten", False),
             random_state=self.params.get("random_state", 42),

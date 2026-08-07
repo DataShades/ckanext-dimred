@@ -7,6 +7,9 @@ ALLOWED_METHODS = "ckanext.dimred.allowed_methods"
 
 MAX_FILE_SIZE_MB = "ckanext.dimred.max_file_size_mb"
 MAX_ROWS = "ckanext.dimred.max_rows"
+UMAP_MAX_ROWS = "ckanext.dimred.umap.max_rows"
+TSNE_MAX_ROWS = "ckanext.dimred.tsne.max_rows"
+PCA_MAX_ROWS = "ckanext.dimred.pca.max_rows"
 
 ENABLE_CATEGORICAL = "ckanext.dimred.enable_categorical"
 MAX_CATEGORIES_FOR_OHE = "ckanext.dimred.max_categories_for_ohe"
@@ -46,6 +49,21 @@ def max_file_size_mb() -> int:
 def max_rows() -> int:
     """Maximum number of rows to load from the resource."""
     return tk.config[MAX_ROWS]
+
+
+def method_max_rows(method_name: str) -> int:
+    """Maximum number of rows that a projection method may process."""
+    limits = {
+        "umap": UMAP_MAX_ROWS,
+        "tsne": TSNE_MAX_ROWS,
+        "pca": PCA_MAX_ROWS,
+    }
+    return tk.config[limits[method_name]]
+
+
+def effective_max_rows(method_name: str) -> int:
+    """Return the stricter of the global and method-specific row limits."""
+    return min(max_rows(), method_max_rows(method_name))
 
 
 def enable_categorical() -> bool:

@@ -141,7 +141,8 @@ def _build_dimred_preview(
     except (TypeError, ValueError) as err:
         raise tk.ValidationError({"method_params": [f"Invalid {method_name} parameters: {err}"]}) from err
 
-    x_matrix, prepare_info = _prepare_matrix_from_resource(context, resource, resource_view)
+    row_limit = dimred_config.effective_max_rows(method_name)
+    x_matrix, prepare_info = _prepare_matrix_from_resource(context, resource, resource_view, row_limit)
     _validate_matrix_compatibility(method_name, reducer.params, x_matrix)
 
     try:
@@ -194,7 +195,7 @@ def _cache_settings(resource: dict[str, Any], resource_view: dict[str, Any]) -> 
         "method_params": effective_params,
         "feature_columns": resource_view.get("feature_columns"),
         "color_by": resource_view.get("color_by"),
-        "max_rows": dimred_config.max_rows(),
+        "effective_max_rows": dimred_config.effective_max_rows(method_name),
         "enable_categorical": dimred_config.enable_categorical(),
         "max_categories_for_ohe": dimred_config.max_categories_for_ohe(),
         "embedding_decimals": dimred_config.embedding_decimals(),
@@ -380,6 +381,7 @@ def _prepare_matrix_from_resource(
     context: types.Context,
     resource: dict[str, Any],
     resource_view: dict[str, Any],
+    row_limit: int,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Load a tabular resource, select suitable columns and return a feature matrix.
 
@@ -389,8 +391,8 @@ def _prepare_matrix_from_resource(
       if enabled in config;
     - optional 'color_by' column is passed through to metadata.
     """
-    df, source_row_ids, n_rows_original = _load_dataframe(context, resource, resource_view)
-    df, source_row_ids = _maybe_limit_rows(df, source_row_ids)
+    df, source_row_ids, n_rows_original = _load_dataframe(context, resource, resource_view, row_limit)
+    df, source_row_ids = _maybe_limit_rows(df, source_row_ids, row_limit)
 
     color_by, color_values = _extract_color_info(df, resource_view)
     selected_features = _extract_selected_features(df, resource_view)
@@ -412,6 +414,7 @@ def _prepare_matrix_from_resource(
     info: dict[str, Any] = {
         "n_rows_original": n_rows_original,
         "n_rows_used": len(df),
+        "row_limit": row_limit,
         "source_row_ids": source_row_ids,
         "n_features": x_matrix.shape[1],
         "numeric_used": numeric_cols,
@@ -430,10 +433,11 @@ def _load_dataframe(
     context: types.Context,
     resource: dict[str, Any],
     resource_view: dict[str, Any],
+    row_limit: int,
 ) -> tuple[pd.DataFrame, list[int], int]:
     """Load a dataframe and stable source row IDs through CKAN's supported APIs."""
     if resource.get("datastore_active"):
-        return _load_datastore_dataframe(context, resource)
+        return _load_datastore_dataframe(context, resource, row_limit)
 
     adapter_cls = dimred_utils.get_adapter_for_resource(resource)
     if adapter_cls is None:
@@ -449,7 +453,11 @@ def _load_dataframe(
     return df, list(range(1, len(df) + 1)), len(df)
 
 
-def _load_datastore_dataframe(context: types.Context, resource: dict[str, Any]) -> tuple[pd.DataFrame, list[int], int]:
+def _load_datastore_dataframe(
+    context: types.Context,
+    resource: dict[str, Any],
+    row_limit: int,
+) -> tuple[pd.DataFrame, list[int], int]:
     """Load DataStore records through its authorized action and preserve CKAN `_id`."""
     try:
         search = tk.get_action("datastore_search")
@@ -460,7 +468,7 @@ def _load_datastore_dataframe(context: types.Context, resource: dict[str, Any]) 
         context,
         {
             "resource_id": resource["id"],
-            "limit": dimred_config.max_rows(),
+            "limit": row_limit,
             "include_total": True,
         },
     )
@@ -476,13 +484,16 @@ def _load_datastore_dataframe(context: types.Context, resource: dict[str, Any]) 
     return df.reset_index(drop=True), source_row_ids, result.get("total", len(df))
 
 
-def _maybe_limit_rows(df: pd.DataFrame, source_row_ids: list[int]) -> tuple[pd.DataFrame, list[int]]:
-    """Apply max_rows sampling while retaining each sampled row's source ID."""
-    max_rows = dimred_config.max_rows()
-    if len(df) <= max_rows:
+def _maybe_limit_rows(
+    df: pd.DataFrame,
+    source_row_ids: list[int],
+    row_limit: int,
+) -> tuple[pd.DataFrame, list[int]]:
+    """Apply the effective row limit while retaining each sampled row's source ID."""
+    if len(df) <= row_limit:
         return df, source_row_ids
 
-    sampled = df.sample(max_rows, random_state=42)
+    sampled = df.sample(row_limit, random_state=42)
     sampled_row_ids = [source_row_ids[position] for position in sampled.index]
     return sampled.reset_index(drop=True), sampled_row_ids
 
