@@ -16,6 +16,9 @@ this.ckan.module("dimred-view-echarts", function ($) {
 
             var rawEmbedding = container.attr("data-embedding");
             var rawMeta = container.attr("data-meta");
+            var colorValuesUrl = container.attr("data-color-values-url");
+            var resourceId = container.attr("data-resource-id");
+            var viewId = container.attr("data-view-id");
             var embedding, meta;
 
             try {
@@ -68,11 +71,17 @@ this.ckan.module("dimred-view-echarts", function ($) {
 
             var colorState = { name: null, kind: null };
             var candidateMap = {};
+            var colorValueRequests = {};
+            var selector = null;
+            var colorLoadStatus = null;
             $.each(colorCandidates, function (_, cand) {
                 if (cand && cand.name) {
                     candidateMap[cand.name] = cand;
                 }
             });
+            if (defaultColorBy && candidateMap[defaultColorBy] && legacyColorValues.length === baseCoords.length) {
+                candidateMap[defaultColorBy].values = legacyColorValues;
+            }
 
             var tooltipFormatter = function (params) {
                 var coords = (params.data && params.data.__coords) || params.value || [];
@@ -281,9 +290,64 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     chart.setOption(newOption, true);
                 };
 
+                var sourceRowsMatch = function (receivedIds) {
+                    if (!Array.isArray(receivedIds) || receivedIds.length !== sourceRowIds.length) {
+                        return false;
+                    }
+                    for (var idx = 0; idx < sourceRowIds.length; idx += 1) {
+                        if (receivedIds[idx] !== sourceRowIds[idx]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+
+                var setColorLoadStatus = function (message, isError) {
+                    if (!colorLoadStatus) {
+                        return;
+                    }
+                    colorLoadStatus.text(message || "").toggleClass("text-danger", Boolean(isError));
+                };
+
+                var loadCandidateValues = function (candidate) {
+                    if (Array.isArray(candidate.values)) {
+                        return $.Deferred().resolve(candidate).promise();
+                    }
+                    if (colorValueRequests[candidate.name]) {
+                        return colorValueRequests[candidate.name];
+                    }
+                    if (!colorValuesUrl || !resourceId || !viewId) {
+                        return $.Deferred().reject().promise();
+                    }
+
+                    setColorLoadStatus("Loading color values…", false);
+                    var request = $.ajax({
+                        url: colorValuesUrl,
+                        dataType: "json",
+                        data: {
+                            id: resourceId,
+                            view_id: viewId,
+                            column: candidate.name,
+                        },
+                    }).then(function (response) {
+                        var result = response && response.success ? response.result : null;
+                        if (!result || !Array.isArray(result.values) || !sourceRowsMatch(result.source_row_ids)) {
+                            throw new Error("Color values are not aligned with the embedding.");
+                        }
+                        candidate.values = result.values;
+                        return candidate;
+                    });
+                    colorValueRequests[candidate.name] = request;
+                    request.always(function () {
+                        delete colorValueRequests[candidate.name];
+                    });
+                    return request;
+                };
+
                 var applyColor = function (columnName) {
                     if (!columnName) {
                         applyUniformColor();
+                        setColorLoadStatus("", false);
                         return;
                     }
                     var candidate = candidateMap[columnName];
@@ -291,11 +355,25 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         applyUniformColor();
                         return;
                     }
-                    if (candidate.kind === "numeric") {
-                        applyNumeric(candidate);
-                    } else {
-                        applyCategorical(candidate);
-                    }
+                    loadCandidateValues(candidate)
+                        .done(function (loadedCandidate) {
+                            if (selector && selector.val() !== columnName) {
+                                return;
+                            }
+                            setColorLoadStatus("", false);
+                            if (loadedCandidate.kind === "numeric") {
+                                applyNumeric(loadedCandidate);
+                            } else {
+                                applyCategorical(loadedCandidate);
+                            }
+                        })
+                        .fail(function () {
+                            if (selector && selector.val() !== columnName) {
+                                return;
+                            }
+                            applyUniformColor();
+                            setColorLoadStatus("Unable to load color values. Reload the preview.", true);
+                        });
                 };
 
                 var buildSelector = function () {
@@ -306,6 +384,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     var selectId = "dimred-color-select-input";
                     var label = $('<label class="dimred-color-select__label" for="' + selectId + '">Color by</label>');
                     var select = $('<select class="form-control dimred-color-select__control" id="' + selectId + '"></select>');
+                    colorLoadStatus = $('<span class="dimred-color-select__status" aria-live="polite"></span>');
                     select.append('<option value="">None</option>');
 
                     $.each(colorCandidates, function (_, cand) {
@@ -320,7 +399,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         applyColor($(this).val());
                     });
 
-                    selectContainer.empty().append(label).append(select);
+                    selectContainer.empty().append(label).append(select).append(colorLoadStatus);
                     return select;
                 };
 
@@ -359,12 +438,12 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 };
 
                 if (colorCandidates.length) {
-                    var selector = buildSelector();
+                    selector = buildSelector();
                     var initialValue = defaultColorBy && candidateMap[defaultColorBy] ? defaultColorBy : "";
-                    applyColor(initialValue);
                     if (selector) {
                         selector.val(initialValue);
                     }
+                    applyColor(initialValue);
                 } else {
                     applyLegacyColor();
                 }

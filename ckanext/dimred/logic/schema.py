@@ -15,6 +15,19 @@ def dimred_get_dimred_preview_schema(
 
 
 @validator_args
+def dimred_get_dimred_color_values_schema(
+    not_empty: types.Validator,
+    unicode_safe: types.Validator,
+) -> types.Schema:
+    """Validation schema for loading one dimred color column."""
+    return {
+        "id": [not_empty, unicode_safe],
+        "view_id": [not_empty, unicode_safe],
+        "column": [not_empty, unicode_safe],
+    }
+
+
+@validator_args
 def dimred_form_schema(  # noqa PLR0913
     ignore_empty: types.Validator,
     unicode_safe: types.Validator,

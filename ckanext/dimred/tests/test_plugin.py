@@ -16,6 +16,7 @@ def test_plugin_exports_only_public_actions():
     actions = DimredPlugin().get_actions()
 
     assert "dimred_get_dimred_preview" in actions
+    assert "dimred_get_dimred_color_values" in actions
     assert "dimred_export_embedding" in actions
     assert "dimred_run_dimred_pipeline" not in actions
 

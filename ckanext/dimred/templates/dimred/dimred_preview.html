@@ -43,6 +43,9 @@
                                         data-module="{{ h.dimred_render_module(render_backend) }}"
                                         data-embedding="{{ h.dump_json(embedding) }}"
                                         data-meta="{{ h.dump_json(meta) }}"
+                                        data-color-values-url="{{ h.url_for('api.action', ver=3, logic_function='dimred_get_dimred_color_values') }}"
+                                        data-resource-id="{{ resource.id }}"
+                                        data-view-id="{{ resource_view.id }}"
                                 ></div>
                                 <div id="dimred-color-select" class="mb-3 dimred-color-select"></div>
                             {% endblock %}

@@ -373,8 +373,9 @@ def test_prepare_info_color_candidates(package, create_with_upload):
 
     species = next(c for c in candidates if c.get("name") == "Species")
     assert species["kind"] == "categorical"
-    assert len(species["values"]) == prepare["n_rows_used"]
+    assert "values" not in species
     assert set(species["unique_values"]) == {"setosa", "versicolor", "virginica"}
+    assert len(prepare["color_values"]) == prepare["n_rows_used"]
 
     sepal_length = next(c for c in candidates if c.get("name") == "Sepal.Length")
     assert sepal_length["kind"] == "numeric"
@@ -410,7 +411,7 @@ def test_color_candidates_respect_cardinality_limits(package, create_with_upload
 
     color_candidate = next(c for c in candidates if c.get("name") == "color_col")
     assert color_candidate["kind"] == "categorical"
-    assert len(color_candidate["values"]) == prepare["n_rows_used"]
+    assert "values" not in color_candidate
     assert len(color_candidate["unique_values"]) <= dimred_action.dimred_config.max_categories_for_ohe()
 
     low_cat_candidate = next(c for c in candidates if c.get("name") == "low_cat")
@@ -568,6 +569,25 @@ def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(packa
     assert {(int(row[2]), row[3]) for row in rows[1:]} == {(2, "row-2"), (4, "row-4")}
 
 
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_rows", 4)
+@pytest.mark.ckan_config("ckanext.dimred.pca.max_rows", 2)
+def test_dimred_color_values_are_aligned_with_sampled_file_rows(package, create_with_upload):
+    csv_content = b"x,y,label\n1,11,row-1\n2,12,row-2\n3,13,row-3\n4,14,row-4\n"
+    resource = create_with_upload(csv_content, "rows.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", color_by="label")
+
+    preview = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    colors = call_action("dimred_get_dimred_color_values", id=resource["id"], view_id=view["id"], column="label")
+
+    assert colors == {
+        "column": "label",
+        "kind": "categorical",
+        "values": ["row-2", "row-4"],
+        "source_row_ids": preview["meta"]["prepare_info"]["source_row_ids"],
+    }
+
+
 @pytest.mark.usefixtures("clean_datastore", "with_plugins")
 @pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
 def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_upload):
@@ -596,6 +616,31 @@ def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_uploa
 
     assert rows[0] == ["x", "y", "source_row_id", "label"]
     assert [row[2:] for row in rows[1:]] == [["1", "row-1"], ["2", "row-2"], ["3", "row-3"]]
+
+    colors = call_action("dimred_get_dimred_color_values", id=resource["id"], view_id=view["id"], column="label")
+
+    assert colors == {
+        "column": "label",
+        "kind": "categorical",
+        "values": ["row-1", "row-2", "row-3"],
+        "source_row_ids": [1, 2, 3],
+    }
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_color_values_reject_unavailable_column(package, create_with_upload):
+    resource = create_with_upload(b"x,y\n1,2\n3,4\n", "rows.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca")
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action(
+            "dimred_get_dimred_color_values",
+            id=resource["id"],
+            view_id=view["id"],
+            column="missing",
+        )
+
+    assert excinfo.value.error_dict["column"] == ["Column 'missing' is not available for coloring."]
 
 
 @pytest.mark.usefixtures("clean_datastore", "with_plugins")

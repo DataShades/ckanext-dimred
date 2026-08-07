@@ -25,7 +25,11 @@ from ckanext.dimred.methods import BaseProjectionMethod, get_projection_method
 from ckanext.dimred.utils import cache as dimred_cache
 from ckanext.dimred.utils.export import embedding_to_csv
 
-__all__ = ["dimred_get_dimred_preview", "dimred_export_embedding"]
+__all__ = [
+    "dimred_get_dimred_preview",
+    "dimred_get_dimred_color_values",
+    "dimred_export_embedding",
+]
 
 METHOD_PARAM_NAMES = {
     "pca": {"n_components", "random_state", "whiten"},
@@ -33,7 +37,7 @@ METHOD_PARAM_NAMES = {
     "umap": {"min_dist", "n_components", "n_neighbors", "random_state"},
 }
 
-PIPELINE_SCHEMA_VERSION = 2
+PIPELINE_SCHEMA_VERSION = 3
 
 DATE_LIKE_PATTERN = re.compile(
     r"(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|"
@@ -60,6 +64,32 @@ def dimred_get_dimred_preview(context: types.Context, data_dict: types.DataDict)
             "resource_view": resource_view,
         },
     )
+
+
+@tk.side_effect_free
+@validate(schema.dimred_get_dimred_color_values_schema)
+def dimred_get_dimred_color_values(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
+    """Return values for one color candidate aligned with a dimred embedding."""
+    resource = tk.get_action("resource_show")(context, {"id": data_dict["id"]})
+    resource_view = tk.get_action("resource_view_show")(context, {"id": data_dict["view_id"]})
+    _validate_resource_view_resource(resource, resource_view)
+
+    method_name, _, _ = _resolve_projection_settings(resource_view)
+    row_limit = dimred_config.effective_max_rows(method_name)
+    df, source_row_ids, _ = _load_dataframe(context, resource, resource_view, row_limit)
+    df, source_row_ids = _maybe_limit_rows(df, source_row_ids, row_limit)
+
+    candidate = _color_candidate_for_column(df, resource_view, data_dict["column"])
+    if candidate is None:
+        raise tk.ValidationError({"column": [f"Column '{data_dict['column']}' is not available for coloring."]})
+
+    values = _serialize_color_values(df[candidate["name"]], candidate["kind"])
+    return {
+        "column": candidate["name"],
+        "kind": candidate["kind"],
+        "values": values,
+        "source_row_ids": source_row_ids,
+    }
 
 
 @tk.side_effect_free
@@ -498,9 +528,9 @@ def _maybe_limit_rows(
     return sampled.reset_index(drop=True), sampled_row_ids
 
 
-def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tuple[str, list[str] | None]:
+def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tuple[str, list[Any] | None]:
     """Extract color_by and corresponding values."""
-    color_by = (resource_view.get("color_by") or "").strip()
+    color_by = _color_by_name(resource_view)
     if not color_by:
         return "", None
     if color_by not in df.columns:
@@ -508,11 +538,12 @@ def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tupl
 
     series = df[color_by]
     kind = _infer_color_kind(series)
-    if kind == "numeric":
-        values, _, _ = _serialize_numeric_values(series)
-    else:
-        values, _ = _serialize_categorical_values(series, dimred_config.max_categories_for_ohe())
-    return color_by, values
+    return color_by, _serialize_color_values(series, kind)
+
+
+def _color_by_name(resource_view: dict[str, Any]) -> str:
+    """Return the normalized color column selected in the resource view."""
+    return (resource_view.get("color_by") or "").strip()
 
 
 def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) -> list[str]:
@@ -676,7 +707,7 @@ def _build_color_candidates(
     numeric_cols: list[str],
     categorical_cols: list[str],
 ) -> list[dict[str, Any]]:
-    """Prepare color candidates metadata for the frontend dropdown."""
+    """Prepare compact color candidate descriptors for the frontend dropdown."""
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
     max_categories = max(dimred_config.max_categories_for_ohe(), 1)
@@ -694,17 +725,15 @@ def _build_color_candidates(
             n_unique = series.nunique(dropna=True)
             if not force and (n_unique <= 1 or n_unique > max_categories):
                 return
-            values, unique_values = _serialize_categorical_values(series, max_categories)
             candidates.append(
                 {
                     "name": name,
                     "kind": "categorical",
-                    "values": values,
-                    "unique_values": unique_values,
+                    "unique_values": _categorical_unique_values(series, max_categories),
                 }
             )
         else:
-            values, min_val, max_val = _serialize_numeric_values(series)
+            min_val, max_val = _numeric_range(series)
             if min_val is None or max_val is None:
                 if not force:
                     return
@@ -712,7 +741,6 @@ def _build_color_candidates(
                 {
                     "name": name,
                     "kind": "numeric",
-                    "values": values,
                     "min": min_val,
                     "max": max_val,
                 }
@@ -731,6 +759,18 @@ def _build_color_candidates(
     return candidates
 
 
+def _color_candidate_for_column(
+    df: pd.DataFrame,
+    resource_view: dict[str, Any],
+    column: str,
+) -> dict[str, Any] | None:
+    """Return a color descriptor only when the column is available in the preview."""
+    selected_features = _extract_selected_features(df, resource_view)
+    numeric_cols, categorical_cols, _ = _select_feature_columns(df, _color_by_name(resource_view), selected_features)
+    candidates = _build_color_candidates(df, _color_by_name(resource_view), numeric_cols, categorical_cols)
+    return next((candidate for candidate in candidates if candidate["name"] == column), None)
+
+
 def _infer_color_kind(series: pd.Series) -> str:
     """Return 'categorical' or 'numeric' for a pandas Series."""
     if pd.api.types.is_bool_dtype(series):
@@ -740,20 +780,24 @@ def _infer_color_kind(series: pd.Series) -> str:
     return "categorical"
 
 
-def _serialize_categorical_values(series: pd.Series, unique_limit: int) -> tuple[list[Any], list[str]]:
-    """Return safe values + limited unique list for categorical series."""
-    values: list[Any] = []
+def _serialize_color_values(series: pd.Series, kind: str) -> list[Any]:
+    """Return safe color values for a single selected column."""
+    if kind == "numeric":
+        return _serialize_numeric_values(series)
+
+    return [None if pd.isna(raw) else str(raw) for raw in series.tolist()]
+
+
+def _categorical_unique_values(series: pd.Series, unique_limit: int) -> list[str]:
+    """Return a bounded ordered list of categorical values without a row vector."""
     unique_values: list[str] = []
     seen_values: set[str] = set()
 
     for raw in series.tolist():
         if pd.isna(raw):
-            values.append(None)
             continue
 
         val_str = str(raw)
-        values.append(val_str)
-
         if val_str in seen_values:
             continue
         if len(unique_values) >= unique_limit:
@@ -761,21 +805,23 @@ def _serialize_categorical_values(series: pd.Series, unique_limit: int) -> tuple
         unique_values.append(val_str)
         seen_values.add(val_str)
 
-    return values, unique_values
+    return unique_values
 
 
-def _serialize_numeric_values(series: pd.Series) -> tuple[list[Any], float | None, float | None]:
-    """Return numeric values + min/max for a series."""
+def _serialize_numeric_values(series: pd.Series) -> list[Any]:
+    """Return safe numeric values for a single selected color column."""
     numeric = pd.to_numeric(series, errors="coerce")
-    values = [None if pd.isna(v) or not np.isfinite(v) else float(v) for v in numeric.tolist()]
+    return [None if pd.isna(v) or not np.isfinite(v) else float(v) for v in numeric.tolist()]
 
-    finite_values = [v for v in values if v is not None and np.isfinite(v)]
+
+def _numeric_range(series: pd.Series) -> tuple[float | None, float | None]:
+    """Return finite numeric bounds for a candidate descriptor."""
+    numeric = pd.to_numeric(series, errors="coerce")
+    finite_values = [float(v) for v in numeric.tolist() if not pd.isna(v) and np.isfinite(v)]
     if not finite_values:
-        return values, None, None
+        return None, None
 
-    min_val = float(np.min(finite_values))
-    max_val = float(np.max(finite_values))
-    return values, min_val, max_val
+    return float(np.min(finite_values)), float(np.max(finite_values))
 
 
 def _build_feature_frame(df: pd.DataFrame, numeric_cols: list[str], categorical_cols: list[str]) -> pd.DataFrame:
