@@ -6,6 +6,15 @@ from typing import Any
 
 import numpy as np
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _safe_csv_cell(value: Any) -> Any:
+    """Prevent spreadsheet applications from treating untrusted text as a formula."""
+    if isinstance(value, str) and value.lstrip().startswith(_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
+
 
 def embedding_to_csv(embedding: list[list[float]] | np.ndarray, meta: dict[str, Any]) -> str:
     """Convert embedding + meta into CSV string."""
@@ -21,7 +30,7 @@ def embedding_to_csv(embedding: list[list[float]] | np.ndarray, meta: dict[str, 
     include_color = bool(color_by) and len(color_values) == len(arr)
 
     if include_color:
-        headers.append(color_by)
+        headers.append(_safe_csv_cell(color_by))
 
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -30,7 +39,7 @@ def embedding_to_csv(embedding: list[list[float]] | np.ndarray, meta: dict[str, 
     for idx, coords in enumerate(arr):
         row = list(coords[:n_dims])
         if include_color:
-            row.append(color_values[idx])
+            row.append(_safe_csv_cell(color_values[idx]))
         writer.writerow(row)
 
     return buf.getvalue()

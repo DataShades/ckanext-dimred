@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import csv
+import io
+
+import pytest
+
 from ckanext.dimred.utils.export import embedding_to_csv
 
 
@@ -20,3 +25,23 @@ def test_embedding_to_csv_with_color():
     assert lines[0] == "x,y,label"
     assert lines[1].endswith(",a")
     assert lines[2].endswith(",b")
+
+
+@pytest.mark.parametrize("value", ["=SUM(A1:A2)", "+cmd", "-formula", "@formula", " \t=SUM(A1:A2)"])
+def test_embedding_to_csv_neutralizes_formula_like_color_values(value):
+    csv_text = embedding_to_csv([[1.0, 2.0]], {"prepare_info": {"color_by": "label", "color_values": [value]}})
+
+    rows = list(csv.reader(io.StringIO(csv_text)))
+
+    assert rows == [["x", "y", "label"], ["1.0", "2.0", f"'{value}"]]
+
+
+def test_embedding_to_csv_neutralizes_formula_like_color_header_but_preserves_coordinates():
+    csv_text = embedding_to_csv(
+        [[-1.5, 2.0]],
+        {"prepare_info": {"color_by": "=label", "color_values": ["safe"]}},
+    )
+
+    rows = list(csv.reader(io.StringIO(csv_text)))
+
+    assert rows == [["x", "y", "'=label"], ["-1.5", "2.0", "safe"]]

@@ -84,7 +84,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 if (colorState.name && colorVal !== undefined && colorVal !== null && colorVal !== "") {
                     lines.push(colorState.name + ": " + colorVal);
                 }
-                return lines.join("<br/>");
+                return lines.join("\n");
             };
 
             var baseSeries = {
@@ -102,6 +102,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 option = {
                     tooltip: {
                         trigger: "item",
+                        renderMode: "richText",
                         formatter: tooltipFormatter,
                     },
                     xAxis3D: { type: "value", name: dimNames[0] },
@@ -122,6 +123,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 option = {
                     tooltip: {
                         trigger: "item",
+                        renderMode: "richText",
                         formatter: tooltipFormatter,
                     },
                     xAxis: { type: "value", name: dimNames[0] },
