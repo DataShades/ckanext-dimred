@@ -29,9 +29,9 @@ class DimredFeatureError(DimredError):
 
 
 class DimredResourceUrlError(DimredError):
-    """Raised when resource URL/path is missing."""
+    """Raised when a resource URL cannot be used safely."""
 
-    default_message = "Resource URL is empty."
+    default_message = "Resource URL is invalid."
 
 
 class DimredAdapterNotFoundError(DimredError):
