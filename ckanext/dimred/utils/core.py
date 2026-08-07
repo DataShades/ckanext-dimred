@@ -64,7 +64,6 @@ def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> st
     xs = embedding[:, 0]
     ys = embedding[:, 1]
     is_3d = embedding.shape[1] >= 3  # noqa PLR2004
-    zs = embedding[:, 2] if is_3d else None
 
     info = meta.get("prepare_info", {}) or {}
     color_by = info.get("color_by")
@@ -73,7 +72,7 @@ def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> st
     colors = _compute_colors(color_by, color_values, len(xs))
 
     if is_3d:
-        fig, ax = _make_3d_figure(plt, xs, ys, zs, colors)
+        fig, ax = _make_3d_figure(plt, xs, ys, embedding[:, 2], colors)
     else:
         fig, ax = _make_2d_figure(plt, xs, ys, colors)
 

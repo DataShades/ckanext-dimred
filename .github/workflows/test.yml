@@ -1,6 +1,29 @@
 name: Tests
 on: [push, pull_request]
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    container:
+      image: ckan/ckan-dev:2.11-py3.10
+      options: --user root
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: npm
+    - name: Install quality dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -e '.[dev]'
+        npm ci
+    - name: Run static quality checks
+      run: |
+        ruff check ckanext/dimred
+        python scripts/typecheck.py
+        npm run lint:js
+
   test:
     strategy:
       matrix:

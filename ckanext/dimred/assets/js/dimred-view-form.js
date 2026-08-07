@@ -1,4 +1,4 @@
-ckan.module("dimred-view-form", function ($, _) {
+ckan.module("dimred-view-form", function ($) {
     "use strict";
     return {
         options: {

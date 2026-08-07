@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from ckan import types
 from ckan.logic import validate
 from ckan.plugins import toolkit as tk
+from ckan.types import Context, DataDict
 
 from ckanext.dimred import config as dimred_config
 from ckanext.dimred import utils as dimred_utils
@@ -47,7 +47,7 @@ DATE_LIKE_PATTERN = re.compile(
 
 @tk.side_effect_free
 @validate(schema.dimred_get_dimred_preview_schema)
-def dimred_get_dimred_preview(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
+def dimred_get_dimred_preview(context: Context, data_dict: DataDict) -> dict[str, Any]:
     """Return embedding and metadata for a given resource + view pair.
 
     Expected data_dict keys:
@@ -68,7 +68,7 @@ def dimred_get_dimred_preview(context: types.Context, data_dict: types.DataDict)
 
 @tk.side_effect_free
 @validate(schema.dimred_get_dimred_color_values_schema)
-def dimred_get_dimred_color_values(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
+def dimred_get_dimred_color_values(context: Context, data_dict: DataDict) -> dict[str, Any]:
     """Return values for one color candidate aligned with a dimred embedding."""
     resource = tk.get_action("resource_show")(context, {"id": data_dict["id"]})
     resource_view = tk.get_action("resource_view_show")(context, {"id": data_dict["view_id"]})
@@ -83,7 +83,8 @@ def dimred_get_dimred_color_values(context: types.Context, data_dict: types.Data
     if candidate is None:
         raise tk.ValidationError({"column": [f"Column '{data_dict['column']}' is not available for coloring."]})
 
-    values = _serialize_color_values(df[candidate["name"]], candidate["kind"])
+    series = cast(pd.Series, df[candidate["name"]])
+    values = _serialize_color_values(series, candidate["kind"])
     return {
         "column": candidate["name"],
         "kind": candidate["kind"],
@@ -93,7 +94,7 @@ def dimred_get_dimred_color_values(context: types.Context, data_dict: types.Data
 
 
 @tk.side_effect_free
-def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
+def dimred_run_dimred_pipeline(context: Context, data_dict: DataDict) -> dict[str, Any]:
     """Execute the dimred pipeline and return embedding + metadata.
 
     Accepts either pre-fetched resource/resource_view or ids.
@@ -137,7 +138,7 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
 
 @tk.side_effect_free
 @validate(schema.dimred_export_embedding_schema)
-def dimred_export_embedding(context: types.Context, data_dict: types.DataDict) -> types.ActionResult:
+def dimred_export_embedding(context: Context, data_dict: DataDict) -> dict[str, Any]:
     """Return CSV export for a dimred preview."""
     if not dimred_config.export_enabled():
         raise tk.ValidationError({"export": ["Dimred export is disabled."]})
@@ -161,7 +162,7 @@ def dimred_export_embedding(context: types.Context, data_dict: types.DataDict) -
 def _build_dimred_preview(
     resource: dict[str, Any],
     resource_view: dict[str, Any],
-    context: types.Context,
+    context: Context,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Run the dimred pipeline for a given resource + view."""
     method_name, method_cls, method_params = _resolve_projection_settings(resource_view)
@@ -408,7 +409,7 @@ def _parse_n_components(raw_value: Any) -> int | None:
 
 
 def _prepare_matrix_from_resource(
-    context: types.Context,
+    context: Context,
     resource: dict[str, Any],
     resource_view: dict[str, Any],
     row_limit: int,
@@ -460,7 +461,7 @@ def _prepare_matrix_from_resource(
 
 
 def _load_dataframe(
-    context: types.Context,
+    context: Context,
     resource: dict[str, Any],
     resource_view: dict[str, Any],
     row_limit: int,
@@ -484,7 +485,7 @@ def _load_dataframe(
 
 
 def _load_datastore_dataframe(
-    context: types.Context,
+    context: Context,
     resource: dict[str, Any],
     row_limit: int,
 ) -> tuple[pd.DataFrame, list[int], int]:
@@ -536,7 +537,7 @@ def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tupl
     if color_by not in df.columns:
         raise tk.ValidationError({"color_by": [f"Unknown color column: {color_by}."]})
 
-    series = df[color_by]
+    series = cast(pd.Series, df[color_by])
     kind = _infer_color_kind(series)
     return color_by, _serialize_color_values(series, kind)
 
@@ -585,11 +586,12 @@ def _select_feature_columns(
             skipped_columns.append({"name": col, "reason": "used for color only"})
             continue
 
-        kind = _classify_feature_column(df[col])
+        series = cast(pd.Series, df[col])
+        kind = _classify_feature_column(series)
         if kind == "numeric":
             numeric_cols.append(col)
         elif kind == "categorical":
-            _select_categorical_feature(df[col], col, explicit_selection, categorical_cols, skipped_columns)
+            _select_categorical_feature(series, col, explicit_selection, categorical_cols, skipped_columns)
         else:
             _skip_or_raise_feature(
                 col,
@@ -613,19 +615,14 @@ def _classify_feature_column(series: pd.Series) -> str:
     if non_null.empty:
         return "empty"
 
-    numeric = pd.to_numeric(series, errors="coerce")
+    numeric = cast(pd.Series, pd.to_numeric(series, errors="coerce"))
     finite = numeric.replace([np.inf, -np.inf], np.nan).dropna()
-    if pd.api.types.is_numeric_dtype(series):
-        return "numeric" if not finite.empty else "empty"
-
-    non_null_numeric = pd.to_numeric(non_null, errors="coerce")
-    if non_null_numeric.notna().all():
+    non_null_numeric = cast(pd.Series, pd.to_numeric(non_null, errors="coerce"))
+    if pd.api.types.is_numeric_dtype(series) or non_null_numeric.notna().all():
         return "numeric" if not finite.empty else "empty"
     if non_null_numeric.notna().any():
         return "mixed"
-    if _looks_like_datetime(non_null):
-        return "datetime"
-    return "categorical"
+    return "datetime" if _looks_like_datetime(non_null) else "categorical"
 
 
 def _looks_like_datetime(values: pd.Series) -> bool:
@@ -718,7 +715,7 @@ def _build_color_candidates(
         if name not in df.columns:
             return
 
-        series = df[name]
+        series = cast(pd.Series, df[name])
         kind = _infer_color_kind(series)
 
         if kind == "categorical":
@@ -734,9 +731,8 @@ def _build_color_candidates(
             )
         else:
             min_val, max_val = _numeric_range(series)
-            if min_val is None or max_val is None:
-                if not force:
-                    return
+            if (min_val is None or max_val is None) and not force:
+                return
             candidates.append(
                 {
                     "name": name,
@@ -810,13 +806,13 @@ def _categorical_unique_values(series: pd.Series, unique_limit: int) -> list[str
 
 def _serialize_numeric_values(series: pd.Series) -> list[Any]:
     """Return safe numeric values for a single selected color column."""
-    numeric = pd.to_numeric(series, errors="coerce")
+    numeric = cast(pd.Series, pd.to_numeric(series, errors="coerce"))
     return [None if pd.isna(v) or not np.isfinite(v) else float(v) for v in numeric.tolist()]
 
 
 def _numeric_range(series: pd.Series) -> tuple[float | None, float | None]:
     """Return finite numeric bounds for a candidate descriptor."""
-    numeric = pd.to_numeric(series, errors="coerce")
+    numeric = cast(pd.Series, pd.to_numeric(series, errors="coerce"))
     finite_values = [float(v) for v in numeric.tolist() if not pd.isna(v) and np.isfinite(v)]
     if not finite_values:
         return None, None
@@ -828,12 +824,16 @@ def _build_feature_frame(df: pd.DataFrame, numeric_cols: list[str], categorical_
     """Assemble a finite feature frame with numeric imputation and categorical encoding."""
     try:
         feature_cols = numeric_cols + categorical_cols
-        df_features = df[feature_cols].copy()
+        df_features = cast(pd.DataFrame, df[feature_cols].copy())
         if numeric_cols:
-            numeric = df_features[numeric_cols].apply(pd.to_numeric, errors="coerce")
+            numeric_features = cast(pd.DataFrame, df_features[numeric_cols])
+            numeric = cast(pd.DataFrame, numeric_features.apply(pd.to_numeric, errors="coerce"))
             df_features[numeric_cols] = numeric.replace([np.inf, -np.inf], np.nan)
         if categorical_cols:
-            df_features = pd.get_dummies(df_features, columns=categorical_cols, dummy_na=False, drop_first=False)
+            df_features = cast(
+                pd.DataFrame,
+                pd.get_dummies(df_features, columns=categorical_cols, dummy_na=False, drop_first=False),
+            )
         df_features = df_features.astype(float)
         df_features = df_features.fillna(df_features.mean())
         df_features = df_features.fillna(0.0)

@@ -51,11 +51,14 @@ class DimredCacheManager:
         return f"{self.prefix}:{site_id}:{resource_id}:{view_id}:{settings_sig}"
 
     def get(self, resource_id: str, view_id: str, settings_sig: str) -> dict[str, Any] | None:
-        if not self.enabled:
+        client = self.client
+        if not self.enabled or client is None:
             return None
         try:
-            raw = self.client.get(self._key(resource_id, view_id, settings_sig))
+            raw = client.get(self._key(resource_id, view_id, settings_sig))
             if not raw:
+                return None
+            if not isinstance(raw, (str, bytes, bytearray)):
                 return None
             data = json.loads(raw)
             if isinstance(data, dict) and "embedding" in data and "meta" in data:
@@ -65,12 +68,13 @@ class DimredCacheManager:
         return None
 
     def save(self, resource_id: str, view_id: str, settings_sig: str, result: dict[str, Any]) -> None:
-        if not self.enabled:
+        client = self.client
+        if not self.enabled or client is None:
             return
         try:
             key = self._key(resource_id, view_id, settings_sig)
             payload = json.dumps(result)
-            self.client.setex(key, self.ttl, payload)
+            client.setex(key, self.ttl, payload)
         except (redis_exc.RedisError, TypeError, ValueError) as err:
             log.warning("Dimred cache save failed: %s", err)
 

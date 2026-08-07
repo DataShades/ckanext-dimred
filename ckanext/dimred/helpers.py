@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol, cast
 
 import ckan.plugins.toolkit as tk
 
@@ -8,6 +8,12 @@ from ckanext.dimred import config as dimred_config
 from ckanext.dimred import utils as dimred_utils
 from ckanext.dimred.exception import DimredError
 from ckanext.dimred.methods import get_projection_method
+
+
+class ColumnAdapter(Protocol):
+    """Minimal adapter interface needed to populate form column options."""
+
+    def get_columns(self) -> list[str]: ...
 
 
 def dimred_allowed_methods() -> list[str]:
@@ -66,7 +72,8 @@ def _resource_columns(resource: dict[str, Any], resource_view: dict[str, Any] | 
         adapter_cls = dimred_utils.get_adapter_for_resource(resource)
         if not adapter_cls:
             return []
-        return adapter_cls(resource, resource_view or {}).get_columns()
+        adapter = cast(ColumnAdapter, adapter_cls(resource, resource_view or {}))
+        return adapter.get_columns()
     except (DimredError, KeyError, tk.NotAuthorized, tk.ObjectNotFound, tk.ValidationError):
         return []
 

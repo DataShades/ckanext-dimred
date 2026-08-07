@@ -5,14 +5,14 @@ import logging
 from typing import Any
 
 import ckan.plugins.toolkit as tk
-from ckan import types
+from ckan.types import Context
 
 from ckanext.dimred import config as dimred_config
 
 log = logging.getLogger(__name__)
 
 
-def dimred_allowed_method(value: Any, context: types.Context) -> str:
+def dimred_allowed_method(value: Any, context: Context) -> str | None:
     """Validate that method belongs to allowed dimred methods."""
     if value in (None, ""):
         return value
@@ -32,7 +32,7 @@ def dimred_allowed_method(value: Any, context: types.Context) -> str:
     return method
 
 
-def dimred_feature_columns_list(value: Any, context: types.Context) -> list[str]:
+def dimred_feature_columns_list(value: Any, context: Context) -> list[str] | str | None:
     """Validate/normalize feature_columns to a list of strings."""
     if value in (None, ""):
         return value
@@ -58,7 +58,7 @@ def dimred_feature_columns_list(value: Any, context: types.Context) -> list[str]
     return parsed
 
 
-def dimred_method_params_object(value: Any, context: types.Context) -> dict[str, Any]:
+def dimred_method_params_object(value: Any, context: Context) -> dict[str, Any] | str | None:
     """Validate that method_params is a JSON object or dict."""
     if value in (None, ""):
         return value
@@ -78,7 +78,7 @@ def dimred_method_params_object(value: Any, context: types.Context) -> dict[str,
     raise tk.Invalid(tk._("method_params must be a JSON object."))
 
 
-def dimred_allowed_backend(value: Any, context: types.Context) -> str:
+def dimred_allowed_backend(value: Any, context: Context) -> str | None:
     """Validate that render_backend is one of the supported values."""
     if value in (None, ""):
         return value
@@ -94,7 +94,7 @@ def dimred_allowed_backend(value: Any, context: types.Context) -> str:
     return backend
 
 
-def dimred_n_components(value: Any, context: types.Context) -> int | Any:
+def dimred_n_components(value: Any, context: Context) -> int | Any:
     """Validate that n_components is 2 or 3."""
     if value in (None, ""):
         return value

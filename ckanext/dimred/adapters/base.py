@@ -254,7 +254,7 @@ def _validate_remote_url(url: str) -> tuple[SplitResult, list[str]]:
         results = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except socket.gaierror as err:
         raise DimredRemoteFetchError from err
-    addresses = list(dict.fromkeys(result[4][0] for result in results))
+    addresses = list(dict.fromkeys(address for result in results if isinstance(address := result[4][0], str)))
     if not addresses or any(not _is_public_address(address) for address in addresses):
         raise DimredRemoteFetchError
     return parsed, addresses

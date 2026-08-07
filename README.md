@@ -209,6 +209,18 @@ Then run the Playwright suite:
 
     pytest --ckan-ini=test_config/test.ini -m playwright --browser chromium --base-url=http://127.0.0.1:5000 ckanext/dimred/tests/e2e
 
+## Static checks
+
+Install the JavaScript lint dependencies once after `pip install -e '.[dev]'`:
+
+    npm ci
+
+Then run the same static checks as CI:
+
+    ruff check ckanext/dimred
+    python scripts/typecheck.py
+    npm run lint:js
+
 ## License
 
 [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)
