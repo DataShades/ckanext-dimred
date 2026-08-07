@@ -5,10 +5,12 @@ import json
 import logging
 from functools import lru_cache
 from typing import Any
+from urllib.parse import quote
 
 from redis import exceptions as redis_exc
 
 from ckan.lib.redis import connect_to_redis
+from ckan.plugins import toolkit as tk
 
 from ckanext.dimred import config as dimred_config
 
@@ -45,7 +47,8 @@ class DimredCacheManager:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _key(self, resource_id: str, view_id: str, settings_sig: str) -> str:
-        return f"{self.prefix}:{resource_id}:{view_id}:{settings_sig}"
+        site_id = quote(str(tk.config.get("ckan.site_id", "default")).strip() or "default", safe="")
+        return f"{self.prefix}:{site_id}:{resource_id}:{view_id}:{settings_sig}"
 
     def get(self, resource_id: str, view_id: str, settings_sig: str) -> dict[str, Any] | None:
         if not self.enabled:
@@ -70,18 +73,6 @@ class DimredCacheManager:
             self.client.setex(key, self.ttl, payload)
         except (redis_exc.RedisError, TypeError, ValueError) as err:
             log.warning("Dimred cache save failed: %s", err)
-
-    def delete_for_resource(self, resource_id: str) -> None:
-        if not self.enabled:
-            return
-        pattern = f"{self.prefix}:{resource_id}:*"
-        try:
-            keys = list(self.client.scan_iter(match=pattern))
-            if keys:
-                self.client.delete(*keys)
-        except redis_exc.RedisError as err:
-            log.warning("Dimred cache delete failed: %s", err)
-
 
 @lru_cache(maxsize=1)
 def get_cache() -> DimredCacheManager:

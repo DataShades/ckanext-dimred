@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
+from ckan.plugins import toolkit as tk
+
+from ckanext.dimred import config as dimred_config
 from ckanext.dimred.logic import action as dimred_action
-from ckanext.dimred.plugin import DimredPlugin
+from ckanext.dimred.utils.cache import DimredCacheManager
 
 
 class FakeCache:
     def __init__(self):
         self.store = {}
-        self.deleted: list[str] = []
         self.enabled = True
 
     def settings_signature(self, settings):
-        return settings.get("method", "sig")
+        return json.dumps(settings, sort_keys=True, default=str)
 
     def get(self, resource_id, view_id, sig):
         return self.store.get((resource_id, view_id, sig))
@@ -22,15 +26,28 @@ class FakeCache:
     def save(self, resource_id, view_id, sig, result):
         self.store[(resource_id, view_id, sig)] = result
 
-    def delete_for_resource(self, resource_id):
-        self.deleted.append(resource_id)
+
+def _upload_resource(**overrides):
+    resource = {
+        "id": "r1",
+        "format": "csv",
+        "url_type": "upload",
+        "url": "rows.csv",
+        "last_modified": "2026-08-07T12:00:00",
+        "size": 100,
+        "hash": "rows-v1",
+    }
+    resource.update(overrides)
+    return resource
 
 
 @pytest.mark.usefixtures("with_plugins")
 def test_cache_settings_include_pipeline_schema_version():
-    settings = dimred_action._cache_settings({"method": "umap"})
+    settings = dimred_action._cache_settings(_upload_resource(), {"method": "umap"})
 
     assert settings["pipeline_schema_version"] == dimred_action.PIPELINE_SCHEMA_VERSION
+    assert settings["method_params"]["n_neighbors"] == 15
+    assert settings["embedding_decimals"] == dimred_config.embedding_decimals()
 
 
 @pytest.mark.usefixtures("with_plugins")
@@ -48,7 +65,7 @@ def test_pipeline_uses_cache(monkeypatch):
     monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
 
     ctx = {"ignore_auth": True}
-    resource = {"id": "r1", "format": "csv"}
+    resource = _upload_resource()
     view = {"id": "v1", "resource_id": "r1", "method": "umap"}
 
     result1 = dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view})
@@ -56,7 +73,7 @@ def test_pipeline_uses_cache(monkeypatch):
 
     assert calls["count"] == 1
     assert result1 == result2
-    assert fake_cache.get("r1", "v1", "umap") == result1
+    assert len(fake_cache.store) == 1
 
 
 @pytest.mark.usefixtures("with_plugins")
@@ -75,7 +92,7 @@ def test_cache_signature_changes_with_method(monkeypatch):
     monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
 
     ctx = {"ignore_auth": True}
-    resource = {"id": "r1", "format": "csv"}
+    resource = _upload_resource()
     view_umap = {"id": "v1", "resource_id": "r1", "method": "umap"}
     view_tsne = {"id": "v1", "resource_id": "r1", "method": "tsne"}
 
@@ -89,7 +106,15 @@ def test_cache_signature_changes_with_method(monkeypatch):
 
 @pytest.mark.usefixtures("with_plugins")
 @pytest.mark.ckan_config("ckanext.dimred.allowed_methods", "umap tsne")
-def test_pipeline_does_not_cache_datastore_previews_until_invalidation_exists(monkeypatch):
+@pytest.mark.parametrize(
+    "resource",
+    [
+        {"id": "r1", "format": "csv", "url_type": "upload", "datastore_active": True},
+        {"id": "r1", "format": "csv", "url_type": "url", "url": "https://example.test/rows.csv"},
+    ],
+    ids=["datastore", "remote"],
+)
+def test_pipeline_bypasses_cache_for_unversioned_resources(monkeypatch, resource):
     fake_cache = FakeCache()
     monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
 
@@ -102,7 +127,6 @@ def test_pipeline_does_not_cache_datastore_previews_until_invalidation_exists(mo
     monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
 
     ctx = {"ignore_auth": True}
-    resource = {"id": "r1", "format": "csv", "datastore_active": True}
     view = {"id": "v1", "resource_id": "r1", "method": "umap"}
 
     dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view})
@@ -113,26 +137,86 @@ def test_pipeline_does_not_cache_datastore_previews_until_invalidation_exists(mo
 
 
 @pytest.mark.usefixtures("with_plugins")
-def test_resource_cache_invalidation_on_update(monkeypatch):
+def test_cache_signature_changes_with_effective_method_defaults(monkeypatch):
     fake_cache = FakeCache()
     monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
 
-    plugin = DimredPlugin()
+    calls = {"count": 0}
 
-    plugin.before_resource_update({}, {"id": "r1", "url": "http://old"}, {"id": "r1", "url": "http://new"})
-    assert fake_cache.deleted == ["r1"]
+    def fake_build(resource, resource_view, context):
+        calls["count"] += 1
+        return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "prepare_info": {}}
 
-    fake_cache.deleted.clear()
-    plugin.before_resource_update({}, {"id": "r1", "url": "http://same"}, {"id": "r1", "url": "http://same"})
-    assert fake_cache.deleted == []
+    monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
+
+    context = {"ignore_auth": True}
+    resource = _upload_resource()
+    view = {"id": "v1", "resource_id": "r1", "method": "umap"}
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+    monkeypatch.setattr("ckanext.dimred.logic.action.dimred_config.umap_n_neighbors", lambda: 20)
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+
+    assert calls["count"] == 2
+    assert len(fake_cache.store) == 2
 
 
 @pytest.mark.usefixtures("with_plugins")
-def test_resource_cache_invalidation_on_delete(monkeypatch):
+def test_cache_signature_changes_with_embedding_decimals(monkeypatch):
     fake_cache = FakeCache()
     monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
 
-    plugin = DimredPlugin()
-    plugin.before_resource_delete({}, {"id": "r1"})
+    calls = {"count": 0}
 
-    assert fake_cache.deleted == ["r1"]
+    def fake_build(resource, resource_view, context):
+        calls["count"] += 1
+        return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "prepare_info": {}}
+
+    monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
+
+    context = {"ignore_auth": True}
+    resource = _upload_resource()
+    view = {"id": "v1", "resource_id": "r1", "method": "umap"}
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+    monkeypatch.setattr("ckanext.dimred.logic.action.dimred_config.embedding_decimals", lambda: 4)
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+
+    assert calls["count"] == 2
+    assert len(fake_cache.store) == 2
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_cache_signature_changes_with_resource_fingerprint(monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
+
+    calls = {"count": 0}
+
+    def fake_build(resource, resource_view, context):
+        calls["count"] += 1
+        return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "prepare_info": {}}
+
+    monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
+
+    context = {"ignore_auth": True}
+    resource = _upload_resource()
+    view = {"id": "v1", "resource_id": "r1", "method": "umap"}
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+    resource["last_modified"] = "2026-08-07T12:01:00"
+    dimred_action.dimred_run_dimred_pipeline(context, {"resource": resource, "resource_view": view})
+
+    assert calls["count"] == 2
+    assert len(fake_cache.store) == 2
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_cache_key_is_scoped_to_site_id(monkeypatch):
+    manager = object.__new__(DimredCacheManager)
+
+    monkeypatch.setitem(tk.config, "ckan.site_id", "site-one")
+    first = manager._key("r1", "v1", "settings")
+    monkeypatch.setitem(tk.config, "ckan.site_id", "site-two")
+    second = manager._key("r1", "v1", "settings")
+
+    assert first != second
+    assert ":site-one:" in first
+    assert ":site-two:" in second

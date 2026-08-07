@@ -84,10 +84,10 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
     resource_view = dict(resource_view)
     resource_view["method_params"] = method_params
 
-    settings = _cache_settings(resource_view)
+    settings = _cache_settings(resource, resource_view)
     cache = dimred_cache.get_cache()
     settings_sig = cache.settings_signature(settings)
-    cacheable = not resource.get("datastore_active")
+    cacheable = _is_cacheable_resource(resource)
 
     cached = cache.get(resource_id, resource_view_id, settings_sig) if cacheable else None
     if cached:
@@ -134,24 +134,7 @@ def _build_dimred_preview(
     context: types.Context,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Run the dimred pipeline for a given resource + view."""
-    method_name = (resource_view.get("method") or "").strip() or dimred_config.default_method()
-    allowed_methods = set(dimred_config.allowed_methods())
-
-    if method_name not in allowed_methods:
-        raise tk.ValidationError({"method": [f"Method '{method_name}' is not allowed."]})
-
-    try:
-        method_cls = get_projection_method(method_name)
-    except KeyError as err:
-        raise tk.ValidationError({"method": [f"Method '{method_name}' is not supported."]}) from err
-
-    method_params = _parse_method_params(resource_view.get("method_params"))
-    n_components = _parse_n_components(resource_view.get("n_components"))
-    if n_components is not None:
-        method_params = dict(method_params)
-        method_params["n_components"] = n_components
-
-    method_params = _validate_method_params(method_name, method_params)
+    method_name, method_cls, method_params = _resolve_projection_settings(resource_view)
 
     try:
         reducer: BaseProjectionMethod = method_cls(**method_params)
@@ -175,19 +158,65 @@ def _build_dimred_preview(
     return embedding, meta
 
 
-def _cache_settings(resource_view: dict[str, Any]) -> dict[str, Any]:
-    """Build settings dict that affects cache identity."""
+def _resolve_projection_settings(
+    resource_view: dict[str, Any],
+) -> tuple[str, type[BaseProjectionMethod], dict[str, Any]]:
+    """Validate projection settings and merge explicit parameters with defaults."""
     method_name = (resource_view.get("method") or "").strip() or dimred_config.default_method()
+    if method_name not in set(dimred_config.allowed_methods()):
+        raise tk.ValidationError({"method": [f"Method '{method_name}' is not allowed."]})
+
+    try:
+        method_cls = get_projection_method(method_name)
+    except KeyError as err:
+        raise tk.ValidationError({"method": [f"Method '{method_name}' is not supported."]}) from err
+
+    method_params = _parse_method_params(resource_view.get("method_params"))
+    n_components = _parse_n_components(resource_view.get("n_components"))
+    if n_components is not None:
+        method_params = dict(method_params)
+        method_params["n_components"] = n_components
+
+    method_params = _validate_method_params(method_name, method_params)
+    effective_params = {
+        **method_cls.default_params(),
+        **{key: value for key, value in method_params.items() if value is not None},
+    }
+    return method_name, method_cls, effective_params
+
+
+def _cache_settings(resource: dict[str, Any], resource_view: dict[str, Any]) -> dict[str, Any]:
+    """Build settings dict that affects cache identity."""
+    method_name, _, effective_params = _resolve_projection_settings(resource_view)
     return {
         "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
         "method": method_name,
-        "method_params": resource_view.get("method_params"),
+        "method_params": effective_params,
         "feature_columns": resource_view.get("feature_columns"),
         "color_by": resource_view.get("color_by"),
-        "n_components": resource_view.get("n_components"),
         "max_rows": dimred_config.max_rows(),
         "enable_categorical": dimred_config.enable_categorical(),
         "max_categories_for_ohe": dimred_config.max_categories_for_ohe(),
+        "embedding_decimals": dimred_config.embedding_decimals(),
+        "resource_fingerprint": _resource_cache_fingerprint(resource),
+    }
+
+
+def _is_cacheable_resource(resource: dict[str, Any]) -> bool:
+    """Return whether a resource has a reliable cache revision fingerprint."""
+    return resource.get("url_type") == "upload" and not resource.get("datastore_active")
+
+
+def _resource_cache_fingerprint(resource: dict[str, Any]) -> dict[str, Any]:
+    """Return CKAN resource metadata that changes when an upload source changes."""
+    return {
+        "id": resource["id"],
+        "url_type": resource.get("url_type"),
+        "url": resource.get("url"),
+        "format": resource.get("format"),
+        "last_modified": resource.get("last_modified"),
+        "size": resource.get("size"),
+        "hash": resource.get("hash"),
     }
 
 
