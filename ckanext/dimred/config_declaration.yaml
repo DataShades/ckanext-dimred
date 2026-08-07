@@ -26,9 +26,10 @@ groups:
       - key: ckanext.dimred.max_rows
         default: 50000
         type: int
+        validators: is_positive_integer
         description: >
-          Maximum number of rows to load from the resource when building
-          the dimred preview.
+          Positive maximum number of rows to load from the resource when
+          building the dimred preview.
 
       - key: ckanext.dimred.enable_categorical
         default: true

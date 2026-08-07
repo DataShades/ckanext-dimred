@@ -43,40 +43,32 @@ def dimred_color_options(fields: list[dict[str, Any]]) -> list[dict[str, str]]:
 def dimred_color_options_from_resource(
     resource: dict[str, Any], resource_view: dict[str, Any] | None = None
 ) -> list[dict[str, str]]:
-    """Return color_by options derived from resource columns via adapter."""
+    """Return color_by options derived from the resource's active data source."""
     options = [{"value": "", "text": tk._("Not selected")}]
-
-    try:
-        adapter_cls = dimred_utils.get_adapter_for_resource(resource)
-        if not adapter_cls:
-            return options
-        adapter = adapter_cls(resource, resource_view or {})
-        cols = adapter.get_columns()
-        options.extend({"value": col, "text": col} for col in cols)
-    except DimredError:
-        return options
-
+    options.extend({"value": col, "text": col} for col in _resource_columns(resource, resource_view))
     return options
 
 
 def dimred_feature_options_from_resource(
     resource: dict[str, Any], resource_view: dict[str, Any] | None = None
 ) -> list[dict[str, str]]:
-    """Return feature selection options derived from resource columns."""
-    options: list[dict[str, str]] = []
+    """Return feature selection options derived from the active data source."""
+    return [{"value": col, "text": col} for col in _resource_columns(resource, resource_view)]
 
+
+def _resource_columns(resource: dict[str, Any], resource_view: dict[str, Any] | None) -> list[str]:
+    """Return selectable columns from DataStore or the resource adapter."""
     try:
+        if resource.get("datastore_active"):
+            info = tk.get_action("datastore_info")({}, {"id": resource["id"]})
+            return [field["id"] for field in info.get("fields", []) if field.get("id") != "_id"]
+
         adapter_cls = dimred_utils.get_adapter_for_resource(resource)
         if not adapter_cls:
-            return options
-        adapter = adapter_cls(resource, resource_view or {})
-        cols = adapter.get_columns()
-        options.extend({"value": col, "text": col} for col in cols)
-
-    except DimredError:
-        return options
-
-    return options
+            return []
+        return adapter_cls(resource, resource_view or {}).get_columns()
+    except (DimredError, KeyError, tk.NotAuthorized, tk.ObjectNotFound, tk.ValidationError):
+        return []
 
 
 def dimred_export_enabled() -> bool:

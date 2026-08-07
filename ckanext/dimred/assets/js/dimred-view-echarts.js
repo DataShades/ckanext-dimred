@@ -37,6 +37,8 @@ this.ckan.module("dimred-view-echarts", function ($) {
             var colorCandidates = Array.isArray(colorCandidatesRaw) ? colorCandidatesRaw : [];
             var defaultColorBy = prepareInfo.color_by || "";
             var legacyColorValues = prepareInfo.color_values || [];
+            var sourceRowIdsRaw = prepareInfo.source_row_ids;
+            var sourceRowIds = Array.isArray(sourceRowIdsRaw) ? sourceRowIdsRaw : [];
 
             var palette = [
                 "#5470c6",
@@ -80,6 +82,10 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 if (is3D && coords.length > 2) {
                     lines.push(dimNames[2] + ": " + coords[2]);
                 }
+                var sourceRowId = params.data ? params.data.__sourceRowId : null;
+                if (sourceRowId !== undefined && sourceRowId !== null) {
+                    lines.push("Source row: " + sourceRowId);
+                }
                 var colorVal = params.data ? params.data.__colorValue : null;
                 if (colorState.name && colorVal !== undefined && colorVal !== null && colorVal !== "") {
                     lines.push(colorState.name + ": " + colorVal);
@@ -90,9 +96,9 @@ this.ckan.module("dimred-view-echarts", function ($) {
             var baseSeries = {
                 type: is3D ? "scatter3D" : "scatter",
                 symbolSize: 6,
-                data: $.map(baseCoords, function (coords) {
+                data: $.map(baseCoords, function (coords, idx) {
                     var c = (coords || []).slice(0);
-                    return { value: c, __coords: c };
+                    return { value: c, __coords: c, __sourceRowId: sourceRowIds[idx] };
                 }),
                 encode: is3D ? { x: 0, y: 1, z: 2 } : { x: 0, y: 1 },
             };
@@ -153,9 +159,15 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 };
 
                 var applyUniformColor = function () {
-                    var data = $.map(baseCoords, function (coords) {
+                    var data = $.map(baseCoords, function (coords, idx) {
                         var c = (coords || []).slice(0);
-                        return { value: c, __coords: c, __colorValue: null, itemStyle: { color: baseColor } };
+                        return {
+                            value: c,
+                            __coords: c,
+                            __sourceRowId: sourceRowIds[idx],
+                            __colorValue: null,
+                            itemStyle: { color: baseColor },
+                        };
                     });
                     setColorState(null, null);
                     var newOption = cloneBaseOption();
@@ -195,6 +207,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         data.push({
                             value: c,
                             __coords: c,
+                            __sourceRowId: sourceRowIds[idx],
                             __colorValue: label,
                             itemStyle: { color: itemColor || missingColor },
                         });
@@ -244,6 +257,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         data.push({
                             value: valueWithColor,
                             __coords: c,
+                            __sourceRowId: sourceRowIds[idx],
                             __colorValue: numericVal,
                         });
                     });
@@ -331,6 +345,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         data.push({
                             value: c,
                             __coords: c,
+                            __sourceRowId: sourceRowIds[idx],
                             __colorValue: label,
                             itemStyle: { color: color },
                         });

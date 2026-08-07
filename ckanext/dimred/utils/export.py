@@ -25,10 +25,14 @@ def embedding_to_csv(embedding: list[list[float]] | np.ndarray, meta: dict[str, 
     headers = [labels[i] if i < len(labels) else f"dim_{i + 1}" for i in range(n_dims)]
 
     prepare_info = meta.get("prepare_info", {}) or {}
+    source_row_ids = prepare_info.get("source_row_ids") or []
     color_by = prepare_info.get("color_by")
     color_values = prepare_info.get("color_values") or []
+    include_source_row_id = len(source_row_ids) == len(arr)
     include_color = bool(color_by) and len(color_values) == len(arr)
 
+    if include_source_row_id:
+        headers.append("source_row_id")
     if include_color:
         headers.append(_safe_csv_cell(color_by))
 
@@ -38,6 +42,8 @@ def embedding_to_csv(embedding: list[list[float]] | np.ndarray, meta: dict[str, 
 
     for idx, coords in enumerate(arr):
         row = list(coords[:n_dims])
+        if include_source_row_id:
+            row.append(_safe_csv_cell(source_row_ids[idx]))
         if include_color:
             row.append(_safe_csv_cell(color_values[idx]))
         writer.writerow(row)

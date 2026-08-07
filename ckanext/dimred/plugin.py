@@ -59,7 +59,7 @@ class DimredPlugin(p.SingletonPlugin):
     def can_view(self, data_dict: types.DataDict) -> bool:
         """Determine whether dimred_view is applicable to a given resource."""
         resource = data_dict["resource"]
-        return dimred_utils.get_adapter_for_resource(resource) is not None
+        return bool(resource.get("datastore_active")) or dimred_utils.get_adapter_for_resource(resource) is not None
 
     def setup_template_variables(self, context: types.Context, data_dict: types.DataDict) -> dict[str, Any]:
         """Prepare variables for the template."""

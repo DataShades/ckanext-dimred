@@ -28,6 +28,12 @@ class DimredFeatureError(DimredError):
     default_message = "Not enough features for dimred."
 
 
+class DimredDatastoreError(DimredError):
+    """Raised when a DataStore resource cannot be loaded for dimred."""
+
+    default_message = "DataStore resource cannot be loaded for dimred processing."
+
+
 class DimredResourceUrlError(DimredError):
     """Raised when a resource URL cannot be used safely."""
 

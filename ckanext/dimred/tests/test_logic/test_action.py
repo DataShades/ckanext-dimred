@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import pathlib
 
@@ -16,6 +18,8 @@ from ckanext.dimred.exception import (
     DimredResourceSizeError,
 )
 from ckanext.dimred.logic import action as dimred_action
+
+pytest_plugins = ["ckanext.datastore.tests.conftest"]
 
 IRIS_CSV = pathlib.Path(__file__).resolve().parent.parent / "data" / "iris.csv"
 
@@ -536,6 +540,60 @@ def test_dimred_export_embedding(package, create_with_upload):
 
     assert result["filename"].endswith(".csv")
     assert "x" in result["content"]
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_rows", 2)
+def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(package, create_with_upload):
+    csv_content = b"x,y,label\n1,11,row-1\n2,12,row-2\n3,13,row-3\n4,14,row-4\n"
+    resource = create_with_upload(csv_content, "rows.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", color_by="label")
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    prepare_info = result["meta"]["prepare_info"]
+
+    assert prepare_info["n_rows_original"] == 4
+    assert prepare_info["n_rows_used"] == 2
+    assert set(zip(prepare_info["source_row_ids"], prepare_info["color_values"], strict=True)) == {
+        (2, "row-2"),
+        (4, "row-4"),
+    }
+
+    export = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
+    rows = list(csv.reader(io.StringIO(export["content"])))
+
+    assert rows[0] == ["x", "y", "source_row_id", "label"]
+    assert {(int(row[2]), row[3]) for row in rows[1:]} == {(2, "row-2"), (4, "row-4")}
+
+
+@pytest.mark.usefixtures("clean_datastore", "with_plugins")
+@pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
+def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_upload):
+    resource = create_with_upload(b"x,y,label\n", "rows.csv", format="csv", package_id=package["id"])
+    call_action(
+        "datastore_create",
+        {},
+        resource_id=resource["id"],
+        force=True,
+        records=[
+            {"x": 1, "y": 11, "label": "row-1"},
+            {"x": 2, "y": 12, "label": "row-2"},
+            {"x": 3, "y": 13, "label": "row-3"},
+        ],
+    )
+    view = _create_dimred_view(resource["id"], method="pca", color_by="label")
+
+    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    prepare_info = result["meta"]["prepare_info"]
+
+    assert prepare_info["source_row_ids"] == [1, 2, 3]
+    assert prepare_info["color_values"] == ["row-1", "row-2", "row-3"]
+
+    export = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
+    rows = list(csv.reader(io.StringIO(export["content"])))
+
+    assert rows[0] == ["x", "y", "source_row_id", "label"]
+    assert [row[2:] for row in rows[1:]] == [["1", "row-1"], ["2", "row-2"], ["3", "row-3"]]
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")

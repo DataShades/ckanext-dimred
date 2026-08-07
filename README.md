@@ -12,8 +12,9 @@ can color points by a chosen column and control which columns are used as featur
 
 ## How it works
 
-- Data loading: adapters handle CSV/TSV/XLS/XLSX; row sampling via
-  `ckanext.dimred.max_rows`.
+- Data loading: adapters handle CSV/TSV/XLS/XLSX; active DataStore resources
+  are read through CKAN's DataStore API. Row sampling preserves a stable source
+  row ID (`_id` for DataStore, 1-based ordinal for files).
 - Feature prep: numeric columns included; low-cardinality categoricals one-hot encoded
   if enabled; user can pick feature columns.
 - Dimensionality reduction: choose [UMAP](https://umap-learn.readthedocs.io/)
@@ -42,7 +43,7 @@ can color points by a chosen column and control which columns are used as featur
    to the config value.
 6. Save or Preview to see the rendered embedding (interactive or PNG, depending on
    `ckanext.dimred.render_backend`), and use “Download embedding (CSV)” to get the
-   coordinates.
+   coordinates with their source row IDs.
 
 ### Feature and color columns
 

@@ -21,6 +21,11 @@ def test_plugin_exports_only_public_actions():
 
 
 @pytest.mark.usefixtures("with_plugins")
+def test_can_view_datastore_only_resource():
+    assert DimredPlugin().can_view({"resource": {"datastore_active": True, "format": ""}})
+
+
+@pytest.mark.usefixtures("with_plugins")
 def test_setup_template_variables_returns_error(monkeypatch, sysadmin):
     plugin = DimredPlugin()
 

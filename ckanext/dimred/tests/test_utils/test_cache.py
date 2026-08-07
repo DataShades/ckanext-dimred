@@ -27,6 +27,13 @@ class FakeCache:
 
 
 @pytest.mark.usefixtures("with_plugins")
+def test_cache_settings_include_pipeline_schema_version():
+    settings = dimred_action._cache_settings({"method": "umap"})
+
+    assert settings["pipeline_schema_version"] == dimred_action.PIPELINE_SCHEMA_VERSION
+
+
+@pytest.mark.usefixtures("with_plugins")
 @pytest.mark.ckan_config("ckanext.dimred.allowed_methods", "umap tsne")
 def test_pipeline_uses_cache(monkeypatch):
     fake_cache = FakeCache()
@@ -34,7 +41,7 @@ def test_pipeline_uses_cache(monkeypatch):
 
     calls = {"count": 0}
 
-    def fake_build(resource, resource_view):
+    def fake_build(resource, resource_view, context):
         calls["count"] += 1
         return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "prepare_info": {}}
 
@@ -60,7 +67,7 @@ def test_cache_signature_changes_with_method(monkeypatch):
 
     calls = {"count": 0}
 
-    def fake_build(resource, resource_view):
+    def fake_build(resource, resource_view, context):
         calls["count"] += 1
         val = float(calls["count"])
         return np.array([[val, val]]), {"method": resource_view["method"], "prepare_info": {}}
@@ -78,6 +85,31 @@ def test_cache_signature_changes_with_method(monkeypatch):
     assert calls["count"] == 2
     assert res_umap != res_tsne
     assert len(fake_cache.store) == 2
+
+
+@pytest.mark.usefixtures("with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.allowed_methods", "umap tsne")
+def test_pipeline_does_not_cache_datastore_previews_until_invalidation_exists(monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
+
+    calls = {"count": 0}
+
+    def fake_build(resource, resource_view, context):
+        calls["count"] += 1
+        return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "prepare_info": {}}
+
+    monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
+
+    ctx = {"ignore_auth": True}
+    resource = {"id": "r1", "format": "csv", "datastore_active": True}
+    view = {"id": "v1", "resource_id": "r1", "method": "umap"}
+
+    dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view})
+    dimred_action.dimred_run_dimred_pipeline(ctx, {"resource": resource, "resource_view": view})
+
+    assert calls["count"] == 2
+    assert fake_cache.store == {}
 
 
 @pytest.mark.usefixtures("with_plugins")

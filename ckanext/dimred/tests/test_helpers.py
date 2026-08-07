@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from ckan.tests.helpers import call_action
+
 from ckanext.dimred import config as dimred_config
 from ckanext.dimred import helpers
+
+pytest_plugins = ["ckanext.datastore.tests.conftest"]
 
 
 class DummyAdapter:
@@ -52,6 +56,33 @@ def test_feature_options_use_columns(monkeypatch):
     assert adapter.columns_called is True
     assert adapter.dataframe_called is False
     assert [o["value"] for o in opts] == ["c1", "c2"]
+
+
+@pytest.mark.usefixtures("clean_db", "clean_datastore", "with_plugins")
+@pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
+def test_resource_options_use_datastore_columns(app, package):
+    call_action(
+        "datastore_create",
+        {},
+        resource={"package_id": package["id"], "name": "DataStore rows", "format": "csv"},
+        records=[{"store_x": 1, "store_y": 2, "label": "first"}],
+    )
+    dataset = call_action("package_show", {}, id=package["id"])
+    resource = dataset["resources"][0]
+
+    assert resource["datastore_active"] is True
+    assert resource["url_type"] == "datastore"
+    assert [option["value"] for option in helpers.dimred_feature_options_from_resource(resource)] == [
+        "store_x",
+        "store_y",
+        "label",
+    ]
+    assert [option["value"] for option in helpers.dimred_color_options_from_resource(resource)] == [
+        "",
+        "store_x",
+        "store_y",
+        "label",
+    ]
 
 
 def test_render_asset_default_echarts(monkeypatch):

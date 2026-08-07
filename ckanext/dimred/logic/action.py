@@ -16,6 +16,7 @@ from ckanext.dimred import config as dimred_config
 from ckanext.dimred import utils as dimred_utils
 from ckanext.dimred.exception import (
     DimredAdapterNotFoundError,
+    DimredDatastoreError,
     DimredFeatureError,
     DimredNumericColumnError,
 )
@@ -31,6 +32,8 @@ METHOD_PARAM_NAMES = {
     "tsne": {"n_components", "perplexity", "random_state"},
     "umap": {"min_dist", "n_components", "n_neighbors", "random_state"},
 }
+
+PIPELINE_SCHEMA_VERSION = 2
 
 DATE_LIKE_PATTERN = re.compile(
     r"(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|"
@@ -84,18 +87,20 @@ def dimred_run_dimred_pipeline(context: types.Context, data_dict: types.DataDict
     settings = _cache_settings(resource_view)
     cache = dimred_cache.get_cache()
     settings_sig = cache.settings_signature(settings)
+    cacheable = not resource.get("datastore_active")
 
-    cached = cache.get(resource_id, resource_view_id, settings_sig)
+    cached = cache.get(resource_id, resource_view_id, settings_sig) if cacheable else None
     if cached:
         return cached
 
-    embedding, meta = _build_dimred_preview(resource, resource_view)
+    embedding, meta = _build_dimred_preview(resource, resource_view, context)
     decimals = dimred_config.embedding_decimals()
     embedding = np.round(np.asarray(embedding, dtype=float), decimals)
     embedding_serializable = embedding.tolist()
 
     result = {"embedding": embedding_serializable, "meta": meta}
-    cache.save(resource_id, resource_view_id, settings_sig, result)
+    if cacheable:
+        cache.save(resource_id, resource_view_id, settings_sig, result)
 
     return result
 
@@ -126,6 +131,7 @@ def dimred_export_embedding(context: types.Context, data_dict: types.DataDict) -
 def _build_dimred_preview(
     resource: dict[str, Any],
     resource_view: dict[str, Any],
+    context: types.Context,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Run the dimred pipeline for a given resource + view."""
     method_name = (resource_view.get("method") or "").strip() or dimred_config.default_method()
@@ -152,7 +158,7 @@ def _build_dimred_preview(
     except (TypeError, ValueError) as err:
         raise tk.ValidationError({"method_params": [f"Invalid {method_name} parameters: {err}"]}) from err
 
-    x_matrix, prepare_info = _prepare_matrix_from_resource(resource, resource_view)
+    x_matrix, prepare_info = _prepare_matrix_from_resource(context, resource, resource_view)
     _validate_matrix_compatibility(method_name, reducer.params, x_matrix)
 
     try:
@@ -173,6 +179,7 @@ def _cache_settings(resource_view: dict[str, Any]) -> dict[str, Any]:
     """Build settings dict that affects cache identity."""
     method_name = (resource_view.get("method") or "").strip() or dimred_config.default_method()
     return {
+        "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
         "method": method_name,
         "method_params": resource_view.get("method_params"),
         "feature_columns": resource_view.get("feature_columns"),
@@ -341,6 +348,7 @@ def _parse_n_components(raw_value: Any) -> int | None:
 
 
 def _prepare_matrix_from_resource(
+    context: types.Context,
     resource: dict[str, Any],
     resource_view: dict[str, Any],
 ) -> tuple[np.ndarray, dict[str, Any]]:
@@ -352,8 +360,8 @@ def _prepare_matrix_from_resource(
       if enabled in config;
     - optional 'color_by' column is passed through to metadata.
     """
-    df = _load_dataframe(resource, resource_view)
-    df, n_rows_original = _maybe_limit_rows(df)
+    df, source_row_ids, n_rows_original = _load_dataframe(context, resource, resource_view)
+    df, source_row_ids = _maybe_limit_rows(df, source_row_ids)
 
     color_by, color_values = _extract_color_info(df, resource_view)
     selected_features = _extract_selected_features(df, resource_view)
@@ -375,6 +383,7 @@ def _prepare_matrix_from_resource(
     info: dict[str, Any] = {
         "n_rows_original": n_rows_original,
         "n_rows_used": len(df),
+        "source_row_ids": source_row_ids,
         "n_features": x_matrix.shape[1],
         "numeric_used": numeric_cols,
         "categorical_used": categorical_cols,
@@ -388,29 +397,65 @@ def _prepare_matrix_from_resource(
     return x_matrix, info
 
 
-def _load_dataframe(resource: dict[str, Any], resource_view: dict[str, Any]) -> pd.DataFrame:
-    """Load dataframe via adapter with validation."""
+def _load_dataframe(
+    context: types.Context,
+    resource: dict[str, Any],
+    resource_view: dict[str, Any],
+) -> tuple[pd.DataFrame, list[int], int]:
+    """Load a dataframe and stable source row IDs through CKAN's supported APIs."""
+    if resource.get("datastore_active"):
+        return _load_datastore_dataframe(context, resource)
+
     adapter_cls = dimred_utils.get_adapter_for_resource(resource)
     if adapter_cls is None:
         res_format = (resource.get("format") or "").lower()
         raise DimredAdapterNotFoundError(res_format)
 
     adapter = adapter_cls(resource, resource_view)
-    df = adapter.get_dataframe()
+    df = adapter.get_dataframe().reset_index(drop=True)
 
     if df.empty:
         raise DimredFeatureError
 
-    return df
+    return df, list(range(1, len(df) + 1)), len(df)
 
 
-def _maybe_limit_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Apply max_rows sampling if configured."""
-    n_rows_original = len(df)
+def _load_datastore_dataframe(context: types.Context, resource: dict[str, Any]) -> tuple[pd.DataFrame, list[int], int]:
+    """Load DataStore records through its authorized action and preserve CKAN `_id`."""
+    try:
+        search = tk.get_action("datastore_search")
+    except KeyError as err:
+        raise DimredDatastoreError from err
+
+    result = search(
+        context,
+        {
+            "resource_id": resource["id"],
+            "limit": dimred_config.max_rows(),
+            "include_total": True,
+        },
+    )
+    records = result.get("records", [])
+    if not records:
+        raise DimredFeatureError
+
+    source_row_ids = [record.get("_id") for record in records]
+    if any(isinstance(row_id, bool) or not isinstance(row_id, int) for row_id in source_row_ids):
+        raise DimredDatastoreError
+
+    df = pd.DataFrame([{key: value for key, value in record.items() if key != "_id"} for record in records])
+    return df.reset_index(drop=True), source_row_ids, result.get("total", len(df))
+
+
+def _maybe_limit_rows(df: pd.DataFrame, source_row_ids: list[int]) -> tuple[pd.DataFrame, list[int]]:
+    """Apply max_rows sampling while retaining each sampled row's source ID."""
     max_rows = dimred_config.max_rows()
-    if max_rows and n_rows_original > max_rows:
-        df = df.sample(max_rows, random_state=42).reset_index(drop=True)
-    return df, n_rows_original
+    if len(df) <= max_rows:
+        return df, source_row_ids
+
+    sampled = df.sample(max_rows, random_state=42)
+    sampled_row_ids = [source_row_ids[position] for position in sampled.index]
+    return sampled.reset_index(drop=True), sampled_row_ids
 
 
 def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tuple[str, list[str] | None]:
