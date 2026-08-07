@@ -195,7 +195,19 @@ do:
 
 To run the tests, do:
 
-    pytest --ckan-ini=test.ini
+    pytest --ckan-ini=test_config/test.ini
+
+Browser tests also need the Chromium binary (once per environment):
+
+    playwright install --with-deps chromium
+
+Start a CKAN development server in a separate terminal:
+
+    ckan -c test_config/test.ini run -t
+
+Then run the Playwright suite:
+
+    pytest --ckan-ini=test_config/test.ini -m playwright --browser chromium --base-url=http://127.0.0.1:5000 ckanext/dimred/tests/e2e
 
 ## License
 

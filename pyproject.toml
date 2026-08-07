@@ -41,7 +41,7 @@ content-type = "text/markdown"
 Homepage = "https://github.com/DataShades/ckanext-dimred"
 
 [project.optional-dependencies]
-dev = ["build>=1.2", "pytest-ckan"]
+dev = ["build>=1.2", "pytest-ckan", "pytest-playwright>=0.8"]
 
 [project.entry-points."ckan.plugins"]
 dimred = "ckanext.dimred.plugin:DimredPlugin"
@@ -124,7 +124,10 @@ ckanext = ["ckanext"]
 self = ["ckanext.dimred"]
 
 [tool.pytest.ini_options]
-addopts = "--ckan-ini test.ini -m 'not benchmark'"
+addopts = "--ckan-ini test_config/test.ini -m 'not benchmark and not playwright'"
+markers = [
+    "playwright: browser tests that require a running CKAN server",
+]
 filterwarnings = [
 ]
 

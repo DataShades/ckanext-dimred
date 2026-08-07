@@ -39,10 +39,10 @@ jobs:
     - name: Setup extension
       run: |
         # Replace default path to CKAN core config file with the one on the container
-        sed -i -e 's/use = config:.*/use = config:\/srv\/app\/src\/ckan\/test-core.ini/' test.ini
-        ckan -c test.ini db init
+        sed -i -e 's/use = config:.*/use = config:\/srv\/app\/src\/ckan\/test-core.ini/' test_config/test.ini
+        ckan -c test_config/test.ini db init
     - name: Run tests
-      run: pytest --ckan-ini=test.ini --cov=ckanext.dimred --disable-warnings ckanext/dimred
+      run: pytest --ckan-ini=test_config/test.ini --cov=ckanext.dimred --disable-warnings ckanext/dimred
     - name: Build and verify release wheel
       if: matrix.ckan-version == '2.11'
       run: |
@@ -74,7 +74,7 @@ jobs:
         assert any(item.startswith("xlrd>=2.0") for item in requirements)
         PY
         pip install --force-reinstall --no-deps dist/*.whl
-        ckan -c test.ini config describe dimred --format json
+        ckan -c test_config/test.ini config describe dimred --format json
         cd /tmp
         python - <<'PY'
         import importlib.metadata
@@ -88,3 +88,76 @@ jobs:
         assert pathlib.Path(plugin.__file__).is_relative_to(package_root)
         assert package_root.joinpath("dimred/config_declaration.yaml").is_file()
         PY
+
+  browser:
+    runs-on: ubuntu-latest
+    container:
+      image: ckan/ckan-dev:2.11-py3.10
+      options: --user root
+    services:
+      solr:
+        image: ckan/ckan-solr:2.11-solr9
+      postgres:
+        image: ckan/ckan-postgres-dev:2.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:3
+    env:
+      CKAN_SQLALCHEMY_URL: postgresql://ckan_default:pass@postgres/ckan_test
+      CKAN_DATASTORE_WRITE_URL: postgresql://datastore_write:pass@postgres/datastore_test
+      CKAN_DATASTORE_READ_URL: postgresql://datastore_read:pass@postgres/datastore_test
+      CKAN_SOLR_URL: http://solr:8983/solr/ckan
+      CKAN_REDIS_URL: redis://redis:6379/1
+      CKAN_SITE_URL: http://127.0.0.1:5000
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install browser test dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -e '.[dev]'
+        playwright install --with-deps chromium
+    - name: Setup extension
+      run: |
+        sed -i -e 's/use = config:.*/use = config:\/srv\/app\/src\/ckan\/test-core.ini/' test_config/test.ini
+        ckan -c test_config/test.ini db init
+    - name: Run browser tests
+      shell: bash
+      run: |
+        set -euo pipefail
+        setsid ckan -c test_config/test.ini run -t > /tmp/ckanext-dimred-browser.log 2>&1 &
+        ckan_pid=$!
+        cleanup() {
+          status=$?
+          kill -- -"$ckan_pid" 2>/dev/null || true
+          wait "$ckan_pid" 2>/dev/null || true
+          if [ "$status" -ne 0 ]; then
+            tail -200 /tmp/ckanext-dimred-browser.log || true
+          fi
+          trap - EXIT
+          exit "$status"
+        }
+        trap cleanup EXIT
+        ready=false
+        for attempt in $(seq 1 30); do
+          if wget --quiet --spider --timeout=1 --tries=1 http://127.0.0.1:5000/api/3/action/status_show; then
+            ready=true
+            break
+          fi
+          sleep 1
+        done
+        test "$ready" = true
+        pytest --ckan-ini=test_config/test.ini -m playwright --browser chromium \
+          --base-url=http://127.0.0.1:5000 --screenshot only-on-failure \
+          --tracing retain-on-failure --output test-results ckanext/dimred/tests/e2e
+    - name: Upload browser artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dimred-browser-artifacts
+        path: test-results
+        if-no-files-found: ignore
