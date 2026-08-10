@@ -93,6 +93,25 @@ def test_dimred_get_dimred_preview_pca(package, create_with_upload):
     assert result["meta"]["method"] == "pca"
 
 
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.pca.max_rows", "3")
+def test_dimred_csv_sampling_preserves_deterministic_color_alignment(package, create_with_upload):
+    csv_content = "x,y,label\n" + "".join(f"{number},{number * 10},row-{number}\n" for number in range(1, 11))
+    resource = create_with_upload(csv_content.encode(), "rows.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", color_by="label")
+
+    first = _build_dimred_preview(resource["id"], view["id"])
+    second = _build_dimred_preview(resource["id"], view["id"])
+    prepare = first["meta"]["prepare_info"]
+    colors = call_action("dimred_get_dimred_color_values", id=resource["id"], view_id=view["id"], column="label")
+
+    assert prepare["n_rows_original"] == 10
+    assert prepare["n_rows_used"] == 3
+    assert prepare["source_row_ids"] == second["meta"]["prepare_info"]["source_row_ids"]
+    assert colors["source_row_ids"] == prepare["source_row_ids"]
+    assert colors["values"] == [f"row-{row_id}" for row_id in prepare["source_row_ids"]]
+
+
 @pytest.mark.usefixtures("clean_db", "clean_redis", "with_plugins", "with_test_worker")
 def test_dimred_background_preview_is_deduplicated_and_becomes_ready(package, create_with_upload):
     with open(IRIS_CSV, "rb") as csv:
@@ -732,12 +751,13 @@ def test_dimred_color_values_are_aligned_with_sampled_file_rows(package, create_
 
     preview = _build_dimred_preview(resource["id"], view["id"])
     colors = call_action("dimred_get_dimred_color_values", id=resource["id"], view_id=view["id"], column="label")
+    source_row_ids = preview["meta"]["prepare_info"]["source_row_ids"]
 
     assert colors == {
         "column": "label",
         "kind": "categorical",
-        "values": ["row-2", "row-4"],
-        "source_row_ids": preview["meta"]["prepare_info"]["source_row_ids"],
+        "values": [f"row-{row_id}" for row_id in source_row_ids],
+        "source_row_ids": source_row_ids,
     }
 
 

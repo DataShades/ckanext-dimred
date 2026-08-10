@@ -76,6 +76,29 @@ def test_tabular_adapter_reads_csv(tmp_path):
 
 
 @pytest.mark.usefixtures("with_plugins")
+def test_tabular_adapter_samples_csv_incrementally_and_deterministically(tmp_path):
+    csv_path = tmp_path / "rows.csv"
+    csv_path.write_text(
+        "x,y\n" + "".join(f"{number},{number * 10}\n" for number in range(1, 21)),
+        encoding="utf-8",
+    )
+    adapter = tabular.TabularAdapter(
+        {"format": "csv", "size": csv_path.stat().st_size},
+        {},
+        filepath=str(csv_path),
+    )
+
+    first_df, first_ids, first_total = adapter.get_sampled_dataframe(4)
+    second_df, second_ids, second_total = adapter.get_sampled_dataframe(4)
+
+    assert first_total == second_total == 20
+    assert len(first_df) == len(first_ids) == 4
+    assert first_ids == second_ids
+    assert first_df.equals(second_df)
+    assert all(1 <= row_id <= first_total for row_id in first_ids)
+
+
+@pytest.mark.usefixtures("with_plugins")
 def test_tabular_adapter_reads_xlsx(tmp_path):
     xlsx_path = tmp_path / "data.xlsx"
     pd.DataFrame({"a": [1, 3], "b": [2, 4]}).to_excel(xlsx_path, index=False)

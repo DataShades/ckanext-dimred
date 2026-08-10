@@ -44,7 +44,7 @@ METHOD_PARAM_NAMES = {
     "umap": {"min_dist", "n_components", "n_neighbors", "random_state"},
 }
 
-PIPELINE_SCHEMA_VERSION = 3
+PIPELINE_SCHEMA_VERSION = 1
 PREVIEW_QUEUE = "dimred"
 PREVIEW_JOB_RESULT_TTL = 3600
 PREVIEW_ENQUEUE_LOCK_TTL = 60
@@ -671,12 +671,13 @@ def _load_dataframe(
         raise DimredAdapterNotFoundError(res_format)
 
     adapter = adapter_cls(resource, resource_view)
-    df = adapter.get_dataframe().reset_index(drop=True)
+    df, source_row_ids, n_rows_original = adapter.get_sampled_dataframe(row_limit)
+    df = df.reset_index(drop=True)
 
     if df.empty:
         raise DimredFeatureError
 
-    return df, list(range(1, len(df) + 1)), len(df)
+    return df, source_row_ids, n_rows_original
 
 
 def _load_datastore_dataframe(

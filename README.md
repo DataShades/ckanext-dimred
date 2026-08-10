@@ -169,7 +169,8 @@ PCA defaults:
 
 For every preview, dimred uses the lower of `ckanext.dimred.max_rows` and the
 selected method's `*.max_rows`. DataStore receives that limit through CKAN's
-`datastore_search`; file resources use deterministic sampling after loading.
+`datastore_search`; CSV and TSV file resources use deterministic reservoir
+sampling while being read in chunks.
 
 Example:
 

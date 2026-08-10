@@ -45,7 +45,7 @@ def _upload_resource(**overrides):
 def test_cache_settings_include_pipeline_schema_version():
     settings = dimred_action._cache_settings(_upload_resource(), {"method": "umap"})
 
-    assert settings["pipeline_schema_version"] == 3
+    assert settings["pipeline_schema_version"] == 1
     assert settings["method_params"]["n_neighbors"] == 15
     assert settings["effective_max_rows"] == 10000
     assert settings["embedding_decimals"] == dimred_config.embedding_decimals()

@@ -206,6 +206,23 @@ class BaseAdapter:
         """
         raise NotImplementedError
 
+    def get_sampled_dataframe(self, row_limit: int):
+        """Return a bounded dataframe with stable one-based source row IDs.
+
+        Adapters that can stream their input should override this method. The
+        fallback preserves the existing behavior for formats that require a
+        complete read, such as Excel workbooks.
+        """
+        df = self.get_dataframe().reset_index(drop=True)
+        n_rows_original = len(df)
+        source_row_ids = list(range(1, n_rows_original + 1))
+        if n_rows_original <= row_limit:
+            return df, source_row_ids, n_rows_original
+
+        sampled = df.sample(row_limit, random_state=42)
+        sampled_row_ids = [source_row_ids[position] for position in sampled.index]
+        return sampled.reset_index(drop=True), sampled_row_ids, n_rows_original
+
 
 _REMOTE_REQUEST_ERRORS = (http.client.HTTPException, OSError, ssl.SSLError)
 

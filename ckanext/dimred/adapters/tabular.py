@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import logging
+import random
+from collections.abc import Iterable
 
 import pandas as pd
 
@@ -9,6 +11,9 @@ from ckanext.dimred.adapters.base import BaseAdapter
 from ckanext.dimred.exception import DimredError
 
 log = logging.getLogger(__name__)
+
+CSV_CHUNK_ROWS = 10_000
+SAMPLE_RANDOM_SEED = 42
 
 
 class TabularAdapter(BaseAdapter):
@@ -43,6 +48,26 @@ class TabularAdapter(BaseAdapter):
 
         return df
 
+    def get_sampled_dataframe(self, row_limit: int) -> tuple[pd.DataFrame, list[int], int]:
+        """Read CSV/TSV incrementally and retain a deterministic reservoir sample."""
+        res_format = (self.resource.get("format") or "").lower()
+        if res_format not in {"csv", "tsv"}:
+            return super().get_sampled_dataframe(row_limit)
+
+        self.validate_size_limit()
+        buffer: io.BytesIO | str = io.BytesIO(self.fetch_remote(self.filepath)) if self.remote else self.filepath
+
+        try:
+            reader = pd.read_csv(
+                buffer,
+                sep="," if res_format == "csv" else "\t",
+                chunksize=CSV_CHUNK_ROWS,
+                low_memory=False,
+            )
+            return _reservoir_sample(reader, row_limit)
+        except Exception as err:
+            raise DimredError(str(err)) from err
+
     def get_columns(self) -> list[str]:
         """Return column names without loading the full dataset where possible."""
         self.validate_size_limit()
@@ -73,3 +98,31 @@ class TabularAdapter(BaseAdapter):
             df = self.get_dataframe()
 
         return df.columns.tolist()
+
+
+def _reservoir_sample(
+    chunks: Iterable[pd.DataFrame],
+    row_limit: int,
+) -> tuple[pd.DataFrame, list[int], int]:
+    """Build a deterministic reservoir sample without retaining all input rows."""
+    rng = random.Random(SAMPLE_RANDOM_SEED)  # noqa: S311 - deterministic sampling is not security-sensitive.
+    records: list[tuple[object, ...]] = []
+    source_row_ids: list[int] = []
+    columns: list[str] | None = None
+    n_rows_original = 0
+
+    for chunk in chunks:
+        columns = [str(column) for column in chunk.columns]
+        for row in chunk.itertuples(index=False, name=None):
+            n_rows_original += 1
+            if len(records) < row_limit:
+                records.append(row)
+                source_row_ids.append(n_rows_original)
+                continue
+
+            replacement_index = rng.randrange(n_rows_original)
+            if replacement_index < row_limit:
+                records[replacement_index] = row
+                source_row_ids[replacement_index] = n_rows_original
+
+    return pd.DataFrame.from_records(records, columns=columns), source_row_ids, n_rows_original
