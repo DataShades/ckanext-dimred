@@ -94,6 +94,24 @@ def test_dimred_get_dimred_preview_pca(package, create_with_upload):
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_form_control_fields_are_not_saved_to_resource_view(package, create_with_upload):
+    resource = create_with_upload(b"x,y\n1,2\n2,3\n3,4\n", "rows.csv", format="csv", package_id=package["id"])
+
+    view = _create_dimred_view(
+        resource["id"],
+        method="pca",
+        n_components=2,
+        method_params=json.dumps({"whiten": True, "random_state": 13}),
+        dimred_param_random_state="13",
+        dimred_param_whiten="true",
+    )
+
+    assert view["method_params"] == {"whiten": True, "random_state": 13}
+    assert "dimred_param_random_state" not in view
+    assert "dimred_param_whiten" not in view
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
 @pytest.mark.ckan_config("ckanext.dimred.pca.max_rows", "3")
 def test_dimred_csv_sampling_preserves_deterministic_color_alignment(package, create_with_upload):
     csv_content = "x,y,label\n" + "".join(f"{number},{number * 10},row-{number}\n" for number in range(1, 11))

@@ -61,6 +61,7 @@ def dimred_form_schema(  # noqa PLR0913
     dimred_method_params_object: types.Validator,
     dimred_allowed_backend: types.Validator,
     dimred_n_components: types.Validator,
+    ignore: types.Validator,
 ) -> types.Schema:
     """Validation schema for the dimred preview form."""
     return {
@@ -70,6 +71,11 @@ def dimred_form_schema(  # noqa PLR0913
         "method_params": [ignore_empty, dimred_method_params_object],
         "render_backend": [ignore_empty, unicode_safe, dimred_allowed_backend],
         "n_components": [ignore_empty, dimred_n_components],
+        "dimred_param_random_state": [ignore],
+        "dimred_param_whiten": [ignore],
+        "dimred_param_perplexity": [ignore],
+        "dimred_param_n_neighbors": [ignore],
+        "dimred_param_min_dist": [ignore],
     }
 
 

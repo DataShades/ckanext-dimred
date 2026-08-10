@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Protocol, cast
 
 import ckan.plugins.toolkit as tk
@@ -109,11 +110,30 @@ def dimred_method_default_params_form(method_name: str) -> dict[str, Any]:
 
 
 def dimred_methods_defaults_form() -> dict[str, dict[str, Any]]:
-    """Return defaults for all methods excluding n_components (for the form textarea)."""
+    """Return defaults for all methods excluding the dedicated n_components field."""
     defaults: dict[str, dict[str, Any]] = {}
     for name in dimred_config.allowed_methods():
         defaults[name] = dimred_method_default_params_form(name)
     return defaults
+
+
+def dimred_method_params_form_values(raw_params: Any, method_name: str) -> dict[str, Any]:
+    """Return displayable method parameters merged with the configured defaults."""
+    defaults = dimred_method_default_params_form(method_name)
+    if isinstance(raw_params, str):
+        try:
+            raw_params = json.loads(raw_params)
+        except (TypeError, ValueError):
+            raw_params = {}
+
+    if not isinstance(raw_params, dict):
+        return defaults
+
+    values = dict(defaults)
+    for name in values:
+        if raw_params.get(name) is not None:
+            values[name] = raw_params[name]
+    return values
 
 
 def dimred_method_labels() -> dict[str, str]:

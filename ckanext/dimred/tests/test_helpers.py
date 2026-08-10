@@ -58,6 +58,32 @@ def test_feature_options_use_columns(monkeypatch):
     assert [o["value"] for o in opts] == ["c1", "c2"]
 
 
+@pytest.mark.usefixtures("with_plugins")
+def test_method_params_form_values_merge_known_saved_values_with_defaults():
+    values = helpers.dimred_method_params_form_values(
+        '{"perplexity": 12, "unexpected": "ignored", "n_components": 3}',
+        "tsne",
+    )
+
+    assert values["perplexity"] == 12
+    assert values["random_state"] == 42
+    assert "unexpected" not in values
+    assert "n_components" not in values
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_method_params_form_values_fall_back_to_defaults_for_invalid_json():
+    assert helpers.dimred_method_params_form_values("not json", "pca") == {
+        "whiten": False,
+        "random_state": 42,
+    }
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_methods_defaults_include_n_components_for_method_switching():
+    assert all("n_components" in defaults for defaults in helpers.dimred_methods_defaults().values())
+
+
 @pytest.mark.usefixtures("clean_db", "clean_datastore", "with_plugins")
 @pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
 def test_resource_options_use_datastore_columns(app, package):

@@ -11,20 +11,13 @@
 {% set feature_options = h.dimred_feature_options_from_resource(resource, resource_view) %}
 {% set method_for_defaults = method_value or h.dimred_default_method() %}
 {% set default_params_full = h.dimred_method_default_params(method_for_defaults) %}
-{% set default_params = h.dimred_method_default_params_form(method_for_defaults) %}
 {% set raw_params_value = data.get('method_params', resource_view.method_params) if resource_view else data.get('method_params') %}
+{% set form_params = h.dimred_method_params_form_values(raw_params_value, method_for_defaults) %}
 {% set n_components_value = data.get('n_components', resource_view.n_components) if resource_view else data.get('n_components') %}
 {% if not n_components_value %}
     {% set n_components_value = default_params_full.get('n_components', 2) %}
 {% endif %}
-{% set defaults_map = h.dimred_methods_defaults_form() %}
-{% set params_value = raw_params_value %}
-{% if params_value is mapping %}
-    {% set params_value = h.dump_json(params_value, indent=2) %}
-{% endif %}
-{% if not params_value %}
-    {% set params_value = h.dump_json(default_params) %}
-{% endif %}
+{% set defaults_map = h.dimred_methods_defaults() %}
 {% set selected_features = data.get('feature_columns', resource_view.feature_columns) if resource_view else data.get('feature_columns') %}
 {% if selected_features is string %}
     {% set selected_features = selected_features.split(',') %}
@@ -45,13 +38,14 @@
 </div>
 
 <div class="form-group control-group">
-    {{ form.select(
+    {{ form.input(
         'n_components',
         id='field-n-components',
         label=_('Number of components'),
-        options=[{'value': 2, 'text': '2'}, {'value': 3, 'text': '3'}],
-        selected=n_components_value,
-        classes=['control-full']
+        value=n_components_value,
+        type='number',
+        classes=['control-full'],
+        attrs={'class': 'form-control'}
     ) }}
 </div>
 
@@ -90,20 +84,87 @@
     ) }}
 </div>
 
-<div class="form-group control-group">
-    {{ form.textarea(
-        'method_params',
-        id='field-method-params',
-        label=_('Method-specific parameters (JSON)'),
-        value=params_value,
-        placeholder='',
-        classes=['control-full'],
-        attrs={
-            'data-module': 'dimred-view-form',
-            'data-module-defaults': h.dump_json(defaults_map)
-        },
-        rows=5
-    ) }}
+<div
+    id="dimred-method-params"
+    data-module="dimred-view-form"
+    data-module-defaults="{{ h.dump_json(defaults_map) }}"
+>
+    <input
+        id="field-method-params"
+        name="method_params"
+        type="hidden"
+        value="{{ h.dump_json(form_params) }}"
+    />
+
+    <div class="form-group control-group">
+        {{ form.input(
+            'dimred_param_random_state',
+            id='field-method-param-random-state',
+            label=_('Random seed'),
+            value=form_params.get('random_state', ''),
+            type='number',
+            classes=['control-full'],
+            attrs={'class': 'form-control', 'data-dimred-param': 'random_state'}
+        ) }}
+    </div>
+
+    <div class="dimred-method-params__group" data-dimred-method="pca"{% if method_for_defaults != 'pca' %} hidden{% endif %}>
+        {{ form.checkbox(
+            'dimred_param_whiten',
+            id='field-method-param-whiten',
+            label=_('Whiten components'),
+            value='true',
+            checked=form_params.get('whiten', false),
+            attrs={'data-dimred-param': 'whiten'}
+        ) }}
+    </div>
+
+    <div class="dimred-method-params__group" data-dimred-method="tsne"{% if method_for_defaults != 'tsne' %} hidden{% endif %}>
+        {{ form.input(
+            'dimred_param_perplexity',
+            id='field-method-param-perplexity',
+            label=_('Perplexity'),
+            value=form_params.get('perplexity', ''),
+            type='number',
+            classes=['control-full'],
+            attrs={'class': 'form-control', 'data-dimred-param': 'perplexity', 'step': 'any'}
+        ) }}
+    </div>
+
+    <div class="dimred-method-params__group" data-dimred-method="umap"{% if method_for_defaults != 'umap' %} hidden{% endif %}>
+        {{ form.input(
+            'dimred_param_n_neighbors',
+            id='field-method-param-n-neighbors',
+            label=_('Number of neighbors'),
+            value=form_params.get('n_neighbors', ''),
+            type='number',
+            classes=['control-full'],
+            attrs={'class': 'form-control', 'data-dimred-param': 'n_neighbors'}
+        ) }}
+        {{ form.input(
+            'dimred_param_min_dist',
+            id='field-method-param-min-dist',
+            label=_('Minimum distance'),
+            value=form_params.get('min_dist', ''),
+            type='number',
+            classes=['control-full'],
+            attrs={'class': 'form-control', 'data-dimred-param': 'min_dist', 'step': 'any'}
+        ) }}
+    </div>
+
+    <button class="btn btn-default" type="button" id="dimred-reset-method-params">
+        {{ _('Reset method defaults') }}
+    </button>
+    {% set method_params_errors = errors.get('method_params') if errors else [] %}
+    {% if method_params_errors %}
+        <strong class="error-inline">
+            {% if method_params_errors is string %}
+                {{ method_params_errors }}
+            {% else %}
+                {{ method_params_errors|join(', ') }}
+            {% endif %}
+        </strong>
+    {% endif %}
 </div>
 
 <div class="form-group control-group">

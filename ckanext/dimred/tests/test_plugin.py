@@ -1,7 +1,10 @@
 import pytest
 
+from ckan.lib.helpers import url_for
 from ckan.plugins import plugin_loaded
 from ckan.plugins import toolkit as tk
+from ckan.tests import factories
+from ckan.tests.helpers import call_action
 
 from ckanext.dimred.plugin import DimredPlugin
 
@@ -26,6 +29,73 @@ def test_plugin_exports_only_public_actions():
 @pytest.mark.usefixtures("with_plugins")
 def test_can_view_datastore_only_resource():
     assert DimredPlugin().can_view({"resource": {"datastore_active": True, "format": ""}})
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_form_renders_method_parameter_controls(app):
+    user = factories.UserWithToken()
+    organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
+    package = factories.Dataset(owner_org=organization["id"])
+    resource = factories.Resource(package_id=package["id"], format="csv")
+    url = url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+        view_type="dimred_view",
+    )
+
+    response = app.get(url, headers={"Authorization": user["token"]})
+
+    assert 'id="field-method-params"' in response
+    assert 'type="hidden"' in response
+    assert 'id="field-method-param-random-state"' in response
+    assert 'id="field-method-param-perplexity"' in response
+    assert 'id="field-method-param-n-neighbors"' in response
+    assert 'data-dimred-param="perplexity" step="any"' in response
+    assert 'data-dimred-param="min_dist" step="any"' in response
+    assert 'data-module-defaults=' in response
+    assert "Method-specific parameters (JSON)" not in response
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_form_submission_persists_method_params_and_restores_controls(app):
+    user = factories.UserWithToken()
+    organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
+    package = factories.Dataset(owner_org=organization["id"])
+    resource = factories.Resource(package_id=package["id"], format="csv")
+    new_view_url = url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+    )
+
+    app.post(
+        new_view_url,
+        headers={"Authorization": user["token"]},
+        query_string={"view_type": "dimred_view"},
+        status=200,
+        data={
+            "title": "Dimred",
+            "view_type": "dimred_view",
+            "method": "tsne",
+            "n_components": "2",
+            "method_params": '{"random_state":42,"perplexity":12.5}',
+            "dimred_param_random_state": "42",
+            "dimred_param_perplexity": "12.5",
+        },
+    )
+    view = call_action("resource_view_list", id=resource["id"])[0]
+    edit_view_url = url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+        view_id=view["id"],
+    )
+    response = app.get(edit_view_url, headers={"Authorization": user["token"]})
+
+    assert view["method_params"] == {"random_state": 42, "perplexity": 12.5}
+    assert 'id="field-method-param-perplexity"' in response
+    assert 'value="12.5"' in response
 
 
 @pytest.mark.usefixtures("with_plugins")

@@ -20,7 +20,7 @@ can color points by a chosen column and control which columns are used as featur
 - Dimensionality reduction: choose [UMAP](https://umap-learn.readthedocs.io/)
   or [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
   or [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html),
-  with configurable defaults and per-view JSON overrides.
+  with configurable defaults and per-view form controls.
 - Rendering: configurable backend — interactive [Apache ECharts](https://echarts.apache.org/)
   with 3D scatter support (default) or static Matplotlib PNG (2D/3D); choose per view
   in the form, with the config value as the default; pluggable to custom renderer if
@@ -37,8 +37,9 @@ can color points by a chosen column and control which columns are used as featur
 2. Create a new resource view of type `dimred_view`.
 3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, and select feature
    columns.
-4. (Optional) Choose output components (`2` or `3`); defaults come from the method
-   config (e.g., `ckanext.dimred.umap.n_components`).
+4. (Optional) Adjust the controls shown for the selected method. Leave a value empty
+   to use its configured default; use **Reset method defaults** to restore them.
+   `n_components` controls 2D/3D output.
 5. (Optional) Pick render backend (`ECharts` interactive or `Matplotlib` PNG) — defaults
    to the config value.
 6. Save or Preview to see the rendered embedding (interactive or PNG, depending on

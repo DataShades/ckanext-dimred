@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import re
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from playwright.sync_api import expect
 from werkzeug.datastructures import FileStorage
 
 from ckan.plugins import toolkit as tk
+from ckan.tests import factories
 from ckan.tests.helpers import call_action
 
 COLOR_ACTION = "dimred_get_dimred_color_values"
 XSS_LABEL = '<img src=x onerror=window.__dimredXss=1>'
+FORM_MODULE_SOURCE = (Path(__file__).resolve().parents[2] / "assets/js/dimred-view-form.js").read_text()
 
 
 def _create_public_dimred_view(package):
@@ -161,3 +165,43 @@ def test_color_selector_rejects_misaligned_values(page, base_url, package):
     expect(status).to_have_text("Unable to load color values. Reload the preview.")
     assert _chart_state(page)["colorValues"] == [None, None, None, None]
     assert page_errors == []
+
+
+@pytest.mark.playwright
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_method_parameter_controls_switch_reset_and_serialize(app, page, base_url):
+    """Run the module against the actual CKAN-rendered resource-view form."""
+    user = factories.UserWithToken()
+    organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
+    package = factories.Dataset(owner_org=organization["id"])
+    resource = factories.Resource(package_id=package["id"], format="csv")
+    form_url = tk.url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+        view_type="dimred_view",
+    )
+    form_response = app.get(form_url, headers={"Authorization": user["token"]})
+
+    page.goto(base_url)
+    page.set_content(
+        re.sub(r"<script\b[^>]*>.*?</script>", "", form_response.text, flags=re.DOTALL | re.IGNORECASE),
+        wait_until="domcontentloaded",
+    )
+    page.add_script_tag(content=FORM_MODULE_SOURCE)
+    page.evaluate(
+        """() => {
+            window.ckan.module.initializeElement(document.getElementById("dimred-method-params"));
+        }"""
+    )
+
+    page.locator("#field-method").select_option("tsne")
+    expect(page.locator('[data-dimred-method="tsne"]')).to_be_visible()
+    expect(page.locator('[data-dimred-method="pca"]')).to_be_hidden()
+    expect(page.locator("#field-n-components")).to_have_value("2")
+
+    page.locator("#field-method-param-perplexity").fill("12.5")
+    expect(page.locator("#field-method-params")).to_have_value('{"random_state":42,"perplexity":12.5}')
+
+    page.locator("#dimred-reset-method-params").click()
+    expect(page.locator("#field-method-param-perplexity")).to_have_value("30")

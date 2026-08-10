@@ -6,23 +6,26 @@ ckan.module("dimred-view-form", function ($) {
         },
 
         initialize: function () {
-            var attrDefaults = $("#field-method-params").attr("data-module-defaults");
-            this.defaults = this._parseDefaults(this.options.defaults || attrDefaults);
+            this.container = $(this.el);
             this.methodSelect = $("#field-method");
+            this.componentsField = $("#field-n-components");
             this.paramsField = $("#field-method-params");
             this.colorSelect = $("#field-color_by");
+            this.resetButton = $("#dimred-reset-method-params");
+            this.paramFields = this.container.find("[data-dimred-param]");
+            this.defaults = this._parseDefaults(this.options.defaults || this.container.attr("data-module-defaults"));
 
             if (!this.methodSelect.length || !this.paramsField.length) {
                 return;
             }
 
-            this.valueByMethod = {};
-            this.currentMethod = this.methodSelect.val();
-            this.currentDefault = this._stringifyDefault(this.currentMethod);
-            this.valueByMethod[this.currentMethod] = this._normalizeJson(this.paramsField.val());
-
             this.methodSelect.on("change", this._onMethodChange.bind(this));
             this.colorSelect.on("change", this._excludeColorFromFeatures.bind(this));
+            this.paramFields.on("change input", this._syncParams.bind(this));
+            this.resetButton.on("click", this._resetCurrentMethod.bind(this));
+            this.container.closest("form").on("submit", this._syncParams.bind(this));
+
+            this._showMethodFields(this.methodSelect.val());
         },
 
         _parseDefaults: function (defaults) {
@@ -36,40 +39,66 @@ ckan.module("dimred-view-form", function ($) {
             return defaults || {};
         },
 
-        _stringifyDefault: function (method) {
-            var methodDefaults = this.defaults[method];
-            return methodDefaults ? JSON.stringify(methodDefaults, null, 2) : "";
-        },
-
-        _normalizeJson: function (text) {
-            var trimmed = (text || "").trim();
-            if (!trimmed) {
-                return "";
-            }
-            try {
-                return JSON.stringify(JSON.parse(trimmed), null, 2);
-            } catch (e) {
-                return trimmed;
-            }
-        },
-
         _onMethodChange: function () {
-            var newMethod = this.methodSelect.val();
-            var currentValue = this._normalizeJson(this.paramsField.val());
+            var method = this.methodSelect.val();
+            this._applyMethodDefaults(method);
+            this._showMethodFields(method);
+            this._syncParams();
+        },
 
-            this.valueByMethod[this.currentMethod] = currentValue;
+        _resetCurrentMethod: function () {
+            this._applyMethodDefaults(this.methodSelect.val());
+            this._syncParams();
+        },
 
-            var nextValue = this.valueByMethod[newMethod];
-            if (!nextValue) {
-                nextValue = this._stringifyDefault(newMethod);
-            }
+        _applyMethodDefaults: function (method) {
+            var defaults = this.defaults[method] || {};
+            this._applyParams(defaults);
+            this.componentsField.val(defaults.n_components === undefined ? "" : defaults.n_components);
+        },
 
-            if (nextValue) {
-                this.paramsField.val(nextValue);
-            }
+        _applyParams: function (params) {
+            this.paramFields.each(function () {
+                var field = $(this);
+                var value = params[field.data("dimred-param")];
+                if (field.attr("type") === "checkbox") {
+                    field.prop("checked", Boolean(value));
+                } else {
+                    field.val(value === undefined || value === null ? "" : value);
+                }
+            });
+        },
 
-            this.currentMethod = newMethod;
-            this.currentDefault = this._stringifyDefault(newMethod);
+        _showMethodFields: function (method) {
+            this.container.find("[data-dimred-method]").each(function () {
+                $(this).prop("hidden", $(this).data("dimred-method") !== method);
+            });
+        },
+
+        _syncParams: function () {
+            var method = this.methodSelect.val();
+            var allowed = this.defaults[method] || {};
+            var params = {};
+
+            this.paramFields.each(function () {
+                var field = $(this);
+                var name = field.data("dimred-param");
+                if (!(name in allowed)) {
+                    return;
+                }
+
+                if (field.attr("type") === "checkbox") {
+                    params[name] = field.is(":checked");
+                    return;
+                }
+
+                var value = field.val();
+                if (value !== "") {
+                    params[name] = Number(value);
+                }
+            });
+
+            this.paramsField.val(JSON.stringify(params));
         },
 
         _excludeColorFromFeatures: function () {
