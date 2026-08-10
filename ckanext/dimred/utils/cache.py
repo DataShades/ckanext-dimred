@@ -50,6 +50,10 @@ class DimredCacheManager:
         site_id = quote(str(tk.config.get("ckan.site_id", "default")).strip() or "default", safe="")
         return f"{self.prefix}:{site_id}:{resource_id}:{view_id}:{settings_sig}"
 
+    def _job_lock_key(self, job_id: str) -> str:
+        site_id = quote(str(tk.config.get("ckan.site_id", "default")).strip() or "default", safe="")
+        return f"{self.prefix}:{site_id}:job-lock:{quote(job_id, safe='')}"
+
     def get(self, resource_id: str, view_id: str, settings_sig: str) -> dict[str, Any] | None:
         client = self.client
         if not self.enabled or client is None:
@@ -58,7 +62,7 @@ class DimredCacheManager:
             raw = client.get(self._key(resource_id, view_id, settings_sig))
             if not raw:
                 return None
-            if not isinstance(raw, (str, bytes, bytearray)):
+            if not isinstance(raw, str | bytes | bytearray):
                 return None
             data = json.loads(raw)
             if isinstance(data, dict) and "embedding" in data and "meta" in data:
@@ -77,6 +81,27 @@ class DimredCacheManager:
             client.setex(key, self.ttl, payload)
         except (redis_exc.RedisError, TypeError, ValueError) as err:
             log.warning("Dimred cache save failed: %s", err)
+
+    def acquire_job_lock(self, job_id: str, ttl: int) -> bool:
+        """Atomically reserve preview job creation for a short period."""
+        client = self.client
+        if client is None:
+            return False
+        try:
+            return bool(client.set(self._job_lock_key(job_id), "1", nx=True, ex=ttl))
+        except redis_exc.RedisError as err:
+            log.warning("Dimred job lock failed: %s", err)
+            raise
+
+    def release_job_lock(self, job_id: str) -> None:
+        """Release a reservation only when enqueueing the job failed."""
+        client = self.client
+        if client is None:
+            return
+        try:
+            client.delete(self._job_lock_key(job_id))
+        except redis_exc.RedisError as err:
+            log.warning("Dimred job lock release failed: %s", err)
 
 @lru_cache(maxsize=1)
 def get_cache() -> DimredCacheManager:

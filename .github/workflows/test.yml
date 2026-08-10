@@ -152,14 +152,19 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
+        setsid ckan -c test_config/test.ini jobs worker dimred > /tmp/ckanext-dimred-worker.log 2>&1 &
+        worker_pid=$!
         setsid ckan -c test_config/test.ini run -t > /tmp/ckanext-dimred-browser.log 2>&1 &
         ckan_pid=$!
         cleanup() {
           status=$?
           kill -- -"$ckan_pid" 2>/dev/null || true
+          kill -- -"$worker_pid" 2>/dev/null || true
           wait "$ckan_pid" 2>/dev/null || true
+          wait "$worker_pid" 2>/dev/null || true
           if [ "$status" -ne 0 ]; then
             tail -200 /tmp/ckanext-dimred-browser.log || true
+            tail -200 /tmp/ckanext-dimred-worker.log || true
           fi
           trap - EXIT
           exit "$status"

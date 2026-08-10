@@ -63,65 +63,14 @@ class DimredPlugin(p.SingletonPlugin):
         """Prepare variables for the template."""
         resource = data_dict["resource"]
         resource_view = data_dict["resource_view"]
-        render_backend_raw = resource_view.get("render_backend") or dimred_config.render_backend()
-        render_backend = str(render_backend_raw).strip() if render_backend_raw is not None else ""
-        if not render_backend:
-            render_backend = dimred_config.render_backend()
-
-        if not resource_view.get("id"):
-            return {
-                "image_data_url": None,
-                "embedding": None,
-                "meta": {},
-                "error": None,
-                "render_backend": render_backend,
-                "resource": resource,
-                "resource_view": resource_view,
-                "package": data_dict.get("package", {}),
-            }
-
-        try:
-            result = tk.get_action("dimred_get_dimred_preview")(
-                {},
-                {"id": resource["id"], "view_id": resource_view["id"]},
-            )
-
-            _raise_if_error(result)
-
-            embedding = result["embedding"]
-            meta = result["meta"]
-            summary_raw = dimred_utils.embedding_summary(np.array(embedding), meta)
-            summary = dimred_utils.build_display_summary(meta, summary_raw)
-
-            if render_backend == "matplotlib":
-                image_data_url = dimred_utils.embedding_to_png_data_url(np.array(embedding), meta)
-                embedding = None  # avoid passing large arrays to the template when unused
-            else:
-                image_data_url = None
-            error = None
-        except tk.ValidationError as exc:
-            image_data_url = None
-            embedding = None
-            meta = {}
-            summary = {}
-            error = _format_validation_error(exc)
-        except (DimredError, tk.NotAuthorized) as exc:
-            image_data_url = None
-            embedding = None
-            meta = {}
-            summary = {}
-            error = str(exc)
+        render_backend = _render_backend(resource_view)
 
         return {
-            "image_data_url": image_data_url,
             "render_backend": render_backend,
-            "embedding": embedding,
-            "meta": meta,
-            "summary": summary,
-            "error": error,
             "resource": resource,
             "resource_view": resource_view,
             "package": data_dict["package"],
+            **_preview_template_state(context, resource, resource_view, render_backend),
         }
 
     def view_template(self, context: types.Context, data_dict: types.DataDict) -> str:
@@ -137,6 +86,79 @@ def _raise_if_error(result: dict[str, Any] | None) -> None:
         raise DimredPreviewError
     if result.get("error"):
         raise DimredPreviewError(str(result["error"]))
+
+
+def _render_backend(resource_view: types.DataDict) -> str:
+    """Resolve the configured render backend for a resource view."""
+    raw_backend = resource_view.get("render_backend") or dimred_config.render_backend()
+    backend = str(raw_backend).strip() if raw_backend is not None else ""
+    return backend or dimred_config.render_backend()
+
+
+def _preview_template_state(
+    context: types.Context,
+    resource: types.DataDict,
+    resource_view: types.DataDict,
+    render_backend: str,
+) -> dict[str, Any]:
+    """Build the result or pending state without running a reducer in the request."""
+    if not resource_view.get("id"):
+        return _empty_preview_template_state()
+
+    try:
+        preview = tk.get_action("dimred_start_preview")(
+            context,
+            {"id": resource["id"], "view_id": resource_view["id"]},
+        )
+    except tk.ValidationError as exc:
+        return _empty_preview_template_state(error=_format_validation_error(exc))
+    except (DimredError, tk.NotAuthorized) as exc:
+        return _empty_preview_template_state(error=str(exc))
+
+    if preview["status"] == "ready":
+        return _ready_preview_template_state(preview["result"], render_backend)
+    if preview["status"] == "failed":
+        return _empty_preview_template_state(error=str(preview.get("error") or tk._("Dimred preview failed.")))
+    return _empty_preview_template_state(status=preview["status"], job_id=preview.get("job_id"))
+
+
+def _ready_preview_template_state(result: dict[str, Any], render_backend: str) -> dict[str, Any]:
+    """Format a completed job result for the resource-view template."""
+    _raise_if_error(result)
+    embedding = result["embedding"]
+    meta = result["meta"]
+    summary_raw = dimred_utils.embedding_summary(np.array(embedding), meta)
+    summary = dimred_utils.build_display_summary(meta, summary_raw)
+    image_data_url = None
+    if render_backend == "matplotlib":
+        image_data_url = dimred_utils.embedding_to_png_data_url(np.array(embedding), meta)
+        embedding = None
+    return {
+        "image_data_url": image_data_url,
+        "embedding": embedding,
+        "meta": meta,
+        "summary": summary,
+        "error": None,
+        "preview_status": "ready",
+        "preview_job_id": None,
+    }
+
+
+def _empty_preview_template_state(
+    status: str | None = None,
+    job_id: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Return a template state with no embedding payload."""
+    return {
+        "image_data_url": None,
+        "embedding": None,
+        "meta": {},
+        "summary": {},
+        "error": error,
+        "preview_status": "failed" if error else status,
+        "preview_job_id": job_id,
+    }
 
 
 def _format_validation_error(error: tk.ValidationError) -> str:

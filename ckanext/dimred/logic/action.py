@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+from hashlib import sha256
 from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+from redis import exceptions as redis_exc
 from sklearn.preprocessing import StandardScaler
 
+from ckan.lib import jobs as ckan_jobs
 from ckan.logic import validate
 from ckan.plugins import toolkit as tk
 from ckan.types import Context, DataDict
@@ -17,8 +20,11 @@ from ckanext.dimred import utils as dimred_utils
 from ckanext.dimred.exception import (
     DimredAdapterNotFoundError,
     DimredDatastoreError,
+    DimredError,
     DimredFeatureError,
     DimredNumericColumnError,
+    DimredPreviewError,
+    DimredRemoteFetchError,
 )
 from ckanext.dimred.logic import schema
 from ckanext.dimred.methods import BaseProjectionMethod, get_projection_method
@@ -26,7 +32,8 @@ from ckanext.dimred.utils import cache as dimred_cache
 from ckanext.dimred.utils.export import embedding_to_csv
 
 __all__ = [
-    "dimred_get_dimred_preview",
+    "dimred_start_preview",
+    "dimred_get_preview_status",
     "dimred_get_dimred_color_values",
     "dimred_export_embedding",
 ]
@@ -38,6 +45,9 @@ METHOD_PARAM_NAMES = {
 }
 
 PIPELINE_SCHEMA_VERSION = 3
+PREVIEW_QUEUE = "dimred"
+PREVIEW_JOB_RESULT_TTL = 3600
+PREVIEW_ENQUEUE_LOCK_TTL = 60
 
 DATE_LIKE_PATTERN = re.compile(
     r"(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|"
@@ -45,18 +55,10 @@ DATE_LIKE_PATTERN = re.compile(
 )
 
 
-@tk.side_effect_free
 @validate(schema.dimred_get_dimred_preview_schema)
-def dimred_get_dimred_preview(context: Context, data_dict: DataDict) -> dict[str, Any]:
-    """Return embedding and metadata for a given resource + view pair.
-
-    Expected data_dict keys:
-    - id: resource id
-    - view_id: resource_view id
-    """
-    resource = tk.get_action("resource_show")(context, {"id": data_dict["id"]})
-    resource_view = tk.get_action("resource_view_show")(context, {"id": data_dict["view_id"]})
-
+def _compute_dimred_preview(context: Context, data_dict: DataDict) -> dict[str, Any]:
+    """Build a preview for the background worker; this is not a public action."""
+    resource, resource_view = _get_preview_resource_and_view(context, data_dict)
     return dimred_run_dimred_pipeline(
         context,
         {
@@ -64,6 +66,84 @@ def dimred_get_dimred_preview(context: Context, data_dict: DataDict) -> dict[str
             "resource_view": resource_view,
         },
     )
+
+
+@validate(schema.dimred_start_preview_schema)
+def dimred_start_preview(context: Context, data_dict: DataDict) -> dict[str, Any]:
+    """Return a cached preview or enqueue a CKAN background job to build it."""
+    resource, resource_view = _get_preview_resource_and_view(context, data_dict)
+    resource_id = resource["id"]
+    resource_view_id = resource_view["id"]
+    cache = dimred_cache.get_cache()
+    settings_sig = cache.settings_signature(_cache_settings(resource, resource_view))
+    cacheable = _is_cacheable_resource(resource)
+
+    cached = cache.get(resource_id, resource_view_id, settings_sig) if cacheable else None
+    if cached:
+        return {"status": "ready", "result": cached}
+
+    if cache.client is None:
+        raise DimredPreviewError
+
+    job_id = _preview_job_id(resource_id, resource_view_id, settings_sig)
+    existing = _preview_job(job_id, resource_id, resource_view_id, settings_sig)
+    if existing is not None:
+        response = _preview_job_response(existing)
+        if response["status"] != "failed" or not response.get("retryable"):
+            return response
+        try:
+            existing.delete()
+        except redis_exc.RedisError as err:
+            raise DimredPreviewError from err
+
+    try:
+        lock_acquired = cache.acquire_job_lock(job_id, PREVIEW_ENQUEUE_LOCK_TTL)
+    except redis_exc.RedisError as err:
+        raise DimredPreviewError from err
+    if not lock_acquired:
+        return {"status": "pending", "job_id": job_id}
+
+    try:
+        job = tk.enqueue_job(
+            _run_preview_job,
+            args=[resource_id, resource_view_id, str(context.get("user") or "")],
+            title="Dimensionality reduction preview",
+            queue=PREVIEW_QUEUE,
+            rq_kwargs={
+                "job_id": job_id,
+                "result_ttl": PREVIEW_JOB_RESULT_TTL,
+                "failure_ttl": PREVIEW_JOB_RESULT_TTL,
+                "meta": {
+                    "dimred_resource_id": resource_id,
+                    "dimred_view_id": resource_view_id,
+                    "dimred_settings_signature": settings_sig,
+                },
+            },
+        )
+    except Exception as err:
+        cache.release_job_lock(job_id)
+        raise DimredPreviewError from err
+
+    cache.release_job_lock(job_id)
+    return _preview_job_response(job)
+
+
+@tk.side_effect_free
+@validate(schema.dimred_get_preview_status_schema)
+def dimred_get_preview_status(context: Context, data_dict: DataDict) -> dict[str, Any]:
+    """Return the authorized application-level status of a dimred preview job."""
+    resource, resource_view = _get_preview_resource_and_view(context, data_dict)
+    resource_id = resource["id"]
+    resource_view_id = resource_view["id"]
+    job_id = data_dict["job_id"]
+    cache = dimred_cache.get_cache()
+    settings_sig = cache.settings_signature(_cache_settings(resource, resource_view))
+    job = _preview_job(job_id, resource_id, resource_view_id, settings_sig)
+    if job is None:
+        # A parallel request can observe the enqueue lock before RQ stores the job.
+        return {"status": "pending", "job_id": job_id}
+
+    return _preview_job_response(job)
 
 
 @tk.side_effect_free
@@ -136,6 +216,99 @@ def dimred_run_dimred_pipeline(context: Context, data_dict: DataDict) -> dict[st
     return result
 
 
+def _get_preview_resource_and_view(
+    context: Context,
+    data_dict: DataDict,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load and validate the resource/view pair before creating a preview job."""
+    resource = tk.get_action("resource_show")(context, {"id": data_dict["id"]})
+    resource_view = tk.get_action("resource_view_show")(context, {"id": data_dict["view_id"]})
+    _validate_resource_view_resource(resource, resource_view)
+
+    resource_view = dict(resource_view)
+    resource_view["method_params"] = _parse_method_params(resource_view.get("method_params"))
+    _resolve_projection_settings(resource_view)
+    return resource, resource_view
+
+
+def _preview_job_id(resource_id: str, resource_view_id: str, settings_sig: str) -> str:
+    """Build a deterministic RQ job ID scoped to the current CKAN site."""
+    site_id = str(tk.config.get("ckan.site_id", "default"))
+    value = ":".join((site_id, resource_id, resource_view_id, settings_sig))
+    return f"dimred-preview-{sha256(value.encode('utf-8')).hexdigest()}"
+
+
+def _preview_job(job_id: str, resource_id: str, resource_view_id: str, settings_sig: str) -> Any | None:
+    """Return a matching dimred job without exposing unrelated CKAN jobs."""
+    try:
+        job = ckan_jobs.job_from_id(job_id)
+    except KeyError:
+        return None
+    except redis_exc.RedisError as err:
+        raise DimredPreviewError from err
+
+    meta = job.meta or {}
+    if (
+        meta.get("dimred_resource_id") != resource_id
+        or meta.get("dimred_view_id") != resource_view_id
+        or meta.get("dimred_settings_signature") != settings_sig
+    ):
+        return None
+    return job
+
+
+def _preview_job_response(job: Any) -> dict[str, Any]:
+    """Map RQ state to the small public status contract used by the view."""
+    try:
+        status = str(job.get_status(refresh=True))
+    except redis_exc.RedisError as err:
+        raise DimredPreviewError from err
+    if status == "finished":
+        try:
+            return_value = job.return_value
+            result = return_value() if callable(return_value) else return_value
+        except redis_exc.RedisError as err:
+            raise DimredPreviewError from err
+        if isinstance(result, dict) and "embedding" in result and "meta" in result:
+            return {"status": "ready", "job_id": job.id, "result": result}
+        if isinstance(result, dict) and isinstance(result.get("error"), str):
+            return {
+                "status": "failed",
+                "job_id": job.id,
+                "error": result["error"],
+                "retryable": bool(result.get("retryable")),
+            }
+        return {"status": "failed", "job_id": job.id, "error": "Dimred preview failed.", "retryable": True}
+    if status in {"failed", "stopped", "canceled"}:
+        return {"status": "failed", "job_id": job.id, "error": "Dimred preview failed.", "retryable": True}
+    if status == "started":
+        return {"status": "running", "job_id": job.id}
+    return {"status": "pending", "job_id": job.id}
+
+
+def _run_preview_job(resource_id: str, resource_view_id: str, user: str) -> dict[str, Any]:
+    """Execute a preview in an RQ worker using the submitter's CKAN identity."""
+    try:
+        return _compute_dimred_preview({"user": user}, {"id": resource_id, "view_id": resource_view_id})
+    except tk.ValidationError as err:
+        return {"error": _validation_error_message(err), "retryable": False}
+    except DimredError as err:
+        return {"error": str(err), "retryable": isinstance(err, DimredRemoteFetchError)}
+    except tk.NotAuthorized:
+        return {"error": "Dimred preview failed.", "retryable": False}
+
+
+def _validation_error_message(error: tk.ValidationError) -> str:
+    """Flatten a validation error without relying on CKAN's UI-only summary."""
+    messages: list[str] = []
+    for values in error.error_dict.values():
+        if isinstance(values, list):
+            messages.extend(str(value) for value in values)
+        else:
+            messages.append(str(values))
+    return " ".join(messages) or "Dimred preview failed."
+
+
 @tk.side_effect_free
 @validate(schema.dimred_export_embedding_schema)
 def dimred_export_embedding(context: Context, data_dict: DataDict) -> dict[str, Any]:
@@ -143,9 +316,11 @@ def dimred_export_embedding(context: Context, data_dict: DataDict) -> dict[str, 
     if not dimred_config.export_enabled():
         raise tk.ValidationError({"export": ["Dimred export is disabled."]})
 
-    result = tk.get_action("dimred_get_dimred_preview")(context, data_dict)
-    if not result or "embedding" not in result:
-        raise DimredFeatureError
+    preview = _existing_preview(context, data_dict)
+    if preview["status"] != "ready":
+        raise tk.ValidationError({"preview": ["Dimred preview is still being prepared."]})
+
+    result = preview["result"]
 
     csv_content = embedding_to_csv(result["embedding"], result["meta"])
     resource_id = data_dict["id"]
@@ -157,6 +332,26 @@ def dimred_export_embedding(context: Context, data_dict: DataDict) -> dict[str, 
         "content": csv_content,
         "content_type": "text/csv; charset=utf-8",
     }
+
+
+def _existing_preview(context: Context, data_dict: DataDict) -> dict[str, Any]:
+    """Read a cached or completed preview without enqueueing background work."""
+    resource, resource_view = _get_preview_resource_and_view(context, data_dict)
+    resource_id = resource["id"]
+    resource_view_id = resource_view["id"]
+    cache = dimred_cache.get_cache()
+    settings_sig = cache.settings_signature(_cache_settings(resource, resource_view))
+    cacheable = _is_cacheable_resource(resource)
+
+    cached = cache.get(resource_id, resource_view_id, settings_sig) if cacheable else None
+    if cached:
+        return {"status": "ready", "result": cached}
+
+    job_id = _preview_job_id(resource_id, resource_view_id, settings_sig)
+    job = _preview_job(job_id, resource_id, resource_view_id, settings_sig)
+    if job is None:
+        return {"status": "pending", "job_id": job_id}
+    return _preview_job_response(job)
 
 
 def _build_dimred_preview(
@@ -559,7 +754,7 @@ def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) 
                     selected = [str(v) for v in parsed]
             except json.JSONDecodeError:
                 selected = [f.strip() for f in raw_features.split(",") if f.strip()]
-        elif isinstance(raw_features, (list, tuple, set)):
+        elif isinstance(raw_features, list | tuple | set):
             selected = [str(v) for v in raw_features]
 
     unknown = sorted(set(selected).difference(df.columns))

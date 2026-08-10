@@ -7,14 +7,18 @@ import pathlib
 
 import numpy as np
 import pytest
+from redis import exceptions as redis_exc
 
 import ckan.plugins.toolkit as tk
+from ckan.lib import jobs as ckan_jobs
+from ckan.tests import factories
 from ckan.tests.helpers import call_action
 
 from ckanext.dimred.adapters.tabular import TabularAdapter
 from ckanext.dimred.exception import (
     DimredFeatureError,
     DimredNumericColumnError,
+    DimredPreviewError,
     DimredResourceSizeError,
 )
 from ckanext.dimred.logic import action as dimred_action
@@ -35,6 +39,17 @@ def _create_dimred_view(resource_id, **settings):
     )
 
 
+def _run_dimred_worker():
+    """Run queued dimred work inline through CKAN's no-fork RQ test worker."""
+    worker = ckan_jobs.Worker([dimred_action.PREVIEW_QUEUE])
+    worker.work(burst=True)
+
+
+def _build_dimred_preview(resource_id, view_id):
+    """Exercise the internal reducer directly in focused pipeline tests."""
+    return dimred_action._compute_dimred_preview({}, {"id": resource_id, "view_id": view_id})
+
+
 @pytest.mark.usefixtures("clean_db", "with_plugins")
 def test_dimred_get_dimred_preview_runs_pipeline(package, create_with_upload):
     with open(IRIS_CSV, "rb") as csv:
@@ -49,7 +64,7 @@ def test_dimred_get_dimred_preview_runs_pipeline(package, create_with_upload):
         method="umap",
     )
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     assert "embedding" in result
     assert "meta" in result
@@ -73,9 +88,139 @@ def test_dimred_get_dimred_preview_pca(package, create_with_upload):
         method="pca",
     )
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     assert result["meta"]["method"] == "pca"
+
+
+@pytest.mark.usefixtures("clean_db", "clean_redis", "with_plugins", "with_test_worker")
+def test_dimred_background_preview_is_deduplicated_and_becomes_ready(package, create_with_upload):
+    with open(IRIS_CSV, "rb") as csv:
+        resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca")
+    data_dict = {"id": resource["id"], "view_id": view["id"]}
+
+    first = tk.get_action("dimred_start_preview")({}, data_dict)
+    second = tk.get_action("dimred_start_preview")({}, data_dict)
+
+    assert first["status"] == "pending"
+    assert second == first
+    assert len(ckan_jobs.get_queue(dimred_action.PREVIEW_QUEUE).jobs) == 1
+
+    _run_dimred_worker()
+
+    status = tk.get_action("dimred_get_preview_status")({}, {**data_dict, "job_id": first["job_id"]})
+    assert status["status"] == "ready"
+    assert status["result"]["meta"]["method"] == "pca"
+
+    cached = tk.get_action("dimred_start_preview")({}, data_dict)
+    assert cached["status"] == "ready"
+    assert cached["result"] == status["result"]
+    assert not ckan_jobs.get_queue(dimred_action.PREVIEW_QUEUE).jobs
+
+
+@pytest.mark.usefixtures("clean_db", "clean_redis", "with_plugins", "with_test_worker")
+def test_dimred_background_preview_reports_sanitized_failure(package, create_with_upload):
+    resource = create_with_upload(b"label\na\nb\nc\n", "labels.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca")
+    data_dict = {"id": resource["id"], "view_id": view["id"]}
+
+    started = tk.get_action("dimred_start_preview")({}, data_dict)
+    _run_dimred_worker()
+    status = tk.get_action("dimred_get_preview_status")({}, {**data_dict, "job_id": started["job_id"]})
+
+    assert status == {
+        "status": "failed",
+        "job_id": started["job_id"],
+        "error": "No numeric columns found for dimred processing.",
+        "retryable": False,
+    }
+    assert tk.get_action("dimred_start_preview")({}, data_dict) == status
+    assert not ckan_jobs.get_queue(dimred_action.PREVIEW_QUEUE).jobs
+
+
+@pytest.mark.usefixtures("clean_db", "clean_redis", "with_plugins")
+def test_dimred_background_preview_reports_redis_errors(package, create_with_upload, monkeypatch):
+    resource = create_with_upload(b"x,y\n1,2\n3,4\n", "rows.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca")
+
+    def unavailable_job_store(job_id):
+        raise redis_exc.ConnectionError
+
+    monkeypatch.setattr(dimred_action.ckan_jobs, "job_from_id", unavailable_job_store)
+
+    with pytest.raises(DimredPreviewError):
+        tk.get_action("dimred_start_preview")({}, {"id": resource["id"], "view_id": view["id"]})
+
+
+@pytest.mark.parametrize("status", ["pending", "finished"])
+def test_preview_job_response_normalizes_redis_errors(status):
+    class UnavailableJob:
+        id = "dimred-preview-test"
+
+        def get_status(self, refresh):
+            if status == "pending":
+                raise redis_exc.ConnectionError
+            return status
+
+        def return_value(self):
+            raise redis_exc.ConnectionError
+
+    with pytest.raises(DimredPreviewError):
+        dimred_action._preview_job_response(UnavailableJob())
+
+
+def test_preview_job_response_supports_legacy_rq_return_value_property():
+    result = {"embedding": [[1.0, 2.0]], "meta": {"method": "pca"}}
+
+    class LegacyJob:
+        id = "dimred-preview-test"
+        return_value = result
+
+        def get_status(self, refresh):
+            return "finished"
+
+    assert dimred_action._preview_job_response(LegacyJob()) == {
+        "status": "ready",
+        "job_id": LegacyJob.id,
+        "result": result,
+    }
+
+
+@pytest.mark.usefixtures("clean_db", "clean_redis", "with_plugins", "with_test_worker")
+def test_dimred_background_preview_keeps_private_resource_authorization(create_with_upload):
+    owner = factories.User()
+    outsider = factories.User()
+    organization = factories.Organization(user=owner)
+    package = factories.Dataset(user=owner, owner_org=organization["id"], private=True)
+    context = {"user": owner["name"]}
+    resource = create_with_upload(
+        b"x,y\n1,2\n3,4\n",
+        "private.csv",
+        format="csv",
+        package_id=package["id"],
+        context=context,
+    )
+    view = call_action(
+        "resource_view_create",
+        context,
+        resource_id=resource["id"],
+        view_type="dimred_view",
+        title="Dimred",
+        method="pca",
+    )
+    data_dict = {"id": resource["id"], "view_id": view["id"]}
+
+    started = tk.get_action("dimred_start_preview")(context, data_dict)
+    _run_dimred_worker()
+
+    owner_status = tk.get_action("dimred_get_preview_status")(context, {**data_dict, "job_id": started["job_id"]})
+    assert owner_status["status"] == "ready"
+    with pytest.raises(tk.NotAuthorized):
+        tk.get_action("dimred_get_preview_status")(
+            {"user": outsider["name"]},
+            {**data_dict, "job_id": started["job_id"]},
+        )
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -85,7 +230,7 @@ def test_dimred_get_dimred_preview_tsne(package, create_with_upload):
 
     view = _create_dimred_view(resource["id"], method="tsne", method_params={"perplexity": 5})
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     assert result["meta"]["method"] == "tsne"
 
@@ -98,7 +243,7 @@ def test_dimred_get_dimred_preview_rejects_view_from_another_resource(package, c
     view = _create_dimred_view(other_resource["id"], method="pca")
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict["view_id"] == ["Resource view does not belong to the specified resource."]
 
@@ -110,7 +255,7 @@ def test_dimred_get_dimred_preview_rejects_unknown_method_parameter(package, cre
     view = _create_dimred_view(resource["id"], method="pca", method_params={"unexpected": 1})
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict["method_params"] == ["Unsupported pca parameter(s): unexpected."]
 
@@ -133,7 +278,7 @@ def test_dimred_get_dimred_preview_rejects_invalid_method_parameters(
     view = _create_dimred_view(resource["id"], method=method, method_params=method_params)
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict["method_params"] == [message]
 
@@ -155,7 +300,7 @@ def test_dimred_get_dimred_preview_rejects_parameters_incompatible_with_data(
     view = _create_dimred_view(resource["id"], method=method, method_params=method_params)
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict["method_params" if method != "pca" else "n_components"] == [message]
 
@@ -175,7 +320,7 @@ def test_dimred_get_dimred_preview_respects_n_components(package, create_with_up
         n_components=3,
     )
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     assert result["meta"]["method_params"]["n_components"] == 3
     assert len(result["embedding"][0]) == 3
@@ -197,7 +342,7 @@ def test_dimred_get_dimred_preview_color_and_features(package, create_with_uploa
         feature_columns=["Sepal.Length", "Sepal.Width"],
     )
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     info = result["meta"]["prepare_info"]
     assert info["color_by"] == "Species"
@@ -221,7 +366,7 @@ def test_dimred_get_dimred_preview_rejects_unknown_columns(
     view = _create_dimred_view(resource["id"], method="pca", **view_settings)
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict[field] == [message]
 
@@ -251,10 +396,10 @@ def test_dimred_color_by_is_included_only_when_explicitly_selected(
         resource["id"], method="pca", color_by="color", feature_columns=["x", "y", "color"]
     )
 
-    default_info = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=default_view["id"])["meta"][
+    default_info = _build_dimred_preview(resource["id"], default_view["id"])["meta"][
         "prepare_info"
     ]
-    explicit_info = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=explicit_view["id"])["meta"][
+    explicit_info = _build_dimred_preview(resource["id"], explicit_view["id"])["meta"][
         "prepare_info"
     ]
 
@@ -277,7 +422,7 @@ def test_dimred_get_dimred_preview_rejects_explicit_high_cardinality_categorical
     )
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict["feature_columns"] == [
         f"Feature column 'color' has {max_categories + 1} categories; maximum is {max_categories}."
@@ -297,7 +442,7 @@ def test_dimred_get_dimred_preview_normalizes_numeric_gaps_and_skips_unsupported
     resource = create_with_upload(csv_content, "data.csv", format="csv", package_id=package["id"])
     view = _create_dimred_view(resource["id"], method="pca", color_by="color")
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     info = result["meta"]["prepare_info"]
     assert np.isfinite(np.asarray(result["embedding"])).all()
@@ -341,7 +486,7 @@ def test_dimred_get_dimred_preview_rejects_explicit_unsupported_feature_columns(
     view = _create_dimred_view(resource["id"], method="pca", feature_columns=["x", "y", column])
 
     with pytest.raises(tk.ValidationError) as excinfo:
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
     assert excinfo.value.error_dict["feature_columns"] == [message]
 
@@ -361,7 +506,7 @@ def test_prepare_info_color_candidates(package, create_with_upload):
         color_by="Species",
     )
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
 
     prepare = result["meta"]["prepare_info"]
     candidates = prepare.get("color_candidates") or []
@@ -400,7 +545,7 @@ def test_color_candidates_respect_cardinality_limits(package, create_with_upload
         color_by="color_col",
     )
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
     prepare = result["meta"]["prepare_info"]
     candidates = prepare.get("color_candidates") or []
 
@@ -423,7 +568,7 @@ def test_color_candidates_respect_cardinality_limits(package, create_with_upload
 @pytest.mark.ckan_config("ckan.plugins", "dimred")
 def test_dimred_get_dimred_preview_validation_error():
     with pytest.raises(tk.ValidationError):
-        call_action("dimred_get_dimred_preview", {})
+        dimred_action._compute_dimred_preview({}, {})
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -443,7 +588,7 @@ def test_dimred_pipeline_no_numeric_columns(package, create_with_upload):
     )
 
     with pytest.raises(DimredNumericColumnError):
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -464,7 +609,7 @@ def test_dimred_pipeline_feature_filter_removes_numeric(package, create_with_upl
     )
 
     with pytest.raises(DimredNumericColumnError):
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -484,7 +629,7 @@ def test_dimred_pipeline_single_numeric_feature(package, create_with_upload):
     )
 
     with pytest.raises(DimredFeatureError):
-        call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+        _build_dimred_preview(resource["id"], view["id"])
 
 
 @pytest.mark.usefixtures("with_plugins")
@@ -523,7 +668,7 @@ def test_dimred_pipeline_disallowed_method(package, create_with_upload):
     assert "Method 'abc' is not allowed." in excinfo.value.error_dict["method"][0]
 
 
-@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.usefixtures("clean_db", "clean_redis", "with_plugins", "with_test_worker")
 def test_dimred_export_embedding(package, create_with_upload):
     with open(IRIS_CSV, "rb") as csv:
         resource = create_with_upload(csv.read(), "iris.csv", format="csv", package_id=package["id"])
@@ -536,6 +681,14 @@ def test_dimred_export_embedding(package, create_with_upload):
         title="Dimred",
         method="pca",
     )
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
+
+    assert excinfo.value.error_dict["preview"] == ["Dimred preview is still being prepared."]
+    assert not ckan_jobs.get_queue(dimred_action.PREVIEW_QUEUE).jobs
+    tk.get_action("dimred_start_preview")({}, {"id": resource["id"], "view_id": view["id"]})
+    _run_dimred_worker()
 
     result = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
 
@@ -551,7 +704,7 @@ def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(packa
     resource = create_with_upload(csv_content, "rows.csv", format="csv", package_id=package["id"])
     view = _create_dimred_view(resource["id"], method="pca", color_by="label")
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
     prepare_info = result["meta"]["prepare_info"]
 
     assert prepare_info["n_rows_original"] == 4
@@ -577,7 +730,7 @@ def test_dimred_color_values_are_aligned_with_sampled_file_rows(package, create_
     resource = create_with_upload(csv_content, "rows.csv", format="csv", package_id=package["id"])
     view = _create_dimred_view(resource["id"], method="pca", color_by="label")
 
-    preview = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    preview = _build_dimred_preview(resource["id"], view["id"])
     colors = call_action("dimred_get_dimred_color_values", id=resource["id"], view_id=view["id"], column="label")
 
     assert colors == {
@@ -588,7 +741,7 @@ def test_dimred_color_values_are_aligned_with_sampled_file_rows(package, create_
     }
 
 
-@pytest.mark.usefixtures("clean_datastore", "with_plugins")
+@pytest.mark.usefixtures("clean_datastore", "clean_redis", "with_plugins", "with_test_worker")
 @pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
 def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_upload):
     resource = create_with_upload(b"x,y,label\n", "rows.csv", format="csv", package_id=package["id"])
@@ -605,7 +758,12 @@ def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_uploa
     )
     view = _create_dimred_view(resource["id"], method="pca", color_by="label")
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    started = tk.get_action("dimred_start_preview")({}, {"id": resource["id"], "view_id": view["id"]})
+    _run_dimred_worker()
+    result = tk.get_action("dimred_get_preview_status")(
+        {},
+        {"id": resource["id"], "view_id": view["id"], "job_id": started["job_id"]},
+    )["result"]
     prepare_info = result["meta"]["prepare_info"]
 
     assert prepare_info["source_row_ids"] == [1, 2, 3]
@@ -658,7 +816,7 @@ def test_dimred_preview_passes_method_limit_to_datastore(package, create_with_up
     )
     view = _create_dimred_view(resource["id"], method="pca")
 
-    result = call_action("dimred_get_dimred_preview", id=resource["id"], view_id=view["id"])
+    result = _build_dimred_preview(resource["id"], view["id"])
     prepare_info = result["meta"]["prepare_info"]
 
     assert prepare_info["n_rows_original"] == 3

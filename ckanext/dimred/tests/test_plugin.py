@@ -15,10 +15,12 @@ def test_plugin():
 def test_plugin_exports_only_public_actions():
     actions = DimredPlugin().get_actions()
 
-    assert "dimred_get_dimred_preview" in actions
+    assert "dimred_start_preview" in actions
+    assert "dimred_get_preview_status" in actions
     assert "dimred_get_dimred_color_values" in actions
     assert "dimred_export_embedding" in actions
     assert "dimred_run_dimred_pipeline" not in actions
+    assert "dimred_get_dimred_preview" not in actions
 
 
 @pytest.mark.usefixtures("with_plugins")
@@ -34,8 +36,8 @@ def test_setup_template_variables_returns_error(monkeypatch, sysadmin):
     dummy_view = {"id": "view-1"}
 
     def fake_get_action(name):
-        if name == "dimred_get_dimred_preview":
-            return lambda ctx, data: {"error": "bad"}
+        if name == "dimred_start_preview":
+            return lambda ctx, data: {"status": "failed", "error": "bad"}
         return lambda *a, **k: None
 
     monkeypatch.setattr("ckanext.dimred.plugin.tk.get_action", fake_get_action)
@@ -58,7 +60,7 @@ def test_setup_template_variables_formats_validation_error(monkeypatch, sysadmin
     plugin = DimredPlugin()
 
     def fake_get_action(name):
-        if name == "dimred_get_dimred_preview":
+        if name == "dimred_start_preview":
             def preview(context, data_dict):
                 raise tk.ValidationError({"method_params": field_errors})
 

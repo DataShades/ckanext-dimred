@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "lint:js": "eslint ckanext/dimred/assets/js/dimred-view-form.js ckanext/dimred/assets/js/dimred-view-echarts.js"
+    "lint:js": "eslint ckanext/dimred/assets/js/dimred-view-form.js ckanext/dimred/assets/js/dimred-view-preview.js ckanext/dimred/assets/js/dimred-view-echarts.js"
   },
   "devDependencies": {
     "eslint": "^9.0.0"

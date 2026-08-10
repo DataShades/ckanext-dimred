@@ -49,7 +49,7 @@ def dimred_feature_columns_list(value: Any, context: Context) -> list[str] | str
                 parsed = [str(v) for v in loaded]
         except json.JSONDecodeError:
             parsed = [v.strip() for v in text.split(",") if v.strip()]
-    elif isinstance(value, (list, tuple, set)):
+    elif isinstance(value, list | tuple | set):
         parsed = [str(v) for v in value]
 
     if parsed is None:

@@ -25,8 +25,8 @@ can color points by a chosen column and control which columns are used as featur
   with 3D scatter support (default) or static Matplotlib PNG (2D/3D); choose per view
   in the form, with the config value as the default; pluggable to custom renderer if
   you override bundle/module.
-- API: `dimred_get_dimred_preview` returns the embedding and metadata
-  (prep info, method params) for programmatic use.
+- API: `dimred_start_preview` starts or reads a preview, while
+  `dimred_get_preview_status` returns its asynchronous status and result.
 - Caching: results are cached in Redis by default so repeat calls with
   the same settings avoid recomputing the projection (configurable TTL
   and on/off toggle).
@@ -63,8 +63,8 @@ Automatic selection skips empty, mixed numeric/text, and datetime columns, listi
 `feature_columns` validation error instead. Boolean columns follow the categorical-feature
 setting.
 
-API: use `dimred_get_dimred_preview` with `id` (resource id) and `view_id` to retrieve
-embedding/meta.
+API: call `dimred_start_preview` with `id` (resource id) and `view_id`, then
+poll `dimred_get_preview_status` with the returned `job_id` until it is ready.
 
 ### 3D rendering
 
@@ -205,9 +205,22 @@ Start a CKAN development server in a separate terminal:
 
     ckan -c test_config/test.ini run -t
 
+Start the CKAN worker for DimRed previews in another terminal:
+
+    ckan -c test_config/test.ini jobs worker dimred
+
 Then run the Playwright suite:
 
     pytest --ckan-ini=test_config/test.ini -m playwright --browser chromium --base-url=http://127.0.0.1:5000 ckanext/dimred/tests/e2e
+
+## Background previews
+
+DimRed queues uncached embeddings on CKAN's `dimred` RQ queue, so PCA, t-SNE,
+and UMAP do not run in the web request. The worker command above must run in
+each deployment. It uses CKAN's configured Redis connection and
+`ckan.jobs.timeout`; no separate DimRed worker service or timeout setting is
+required. Completed upload-based previews use the DimRed cache; other results
+remain available through CKAN RQ for a bounded time.
 
 ## Static checks
 

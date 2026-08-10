@@ -3,6 +3,7 @@ dimred-js:
   output: ckanext-dimred/%(version)s-dimred.js
   contents:
     - js/dimred-view-form.js
+    - js/dimred-view-preview.js
   extra:
     preload:
       - base/main

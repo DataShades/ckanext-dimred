@@ -15,6 +15,31 @@ def dimred_get_dimred_preview_schema(
 
 
 @validator_args
+def dimred_start_preview_schema(
+    not_empty: types.Validator,
+    unicode_safe: types.Validator,
+) -> types.Schema:
+    """Validation schema for starting an asynchronous dimred preview."""
+    return {
+        "id": [not_empty, unicode_safe],
+        "view_id": [not_empty, unicode_safe],
+    }
+
+
+@validator_args
+def dimred_get_preview_status_schema(
+    not_empty: types.Validator,
+    unicode_safe: types.Validator,
+) -> types.Schema:
+    """Validation schema for retrieving an asynchronous preview status."""
+    return {
+        "id": [not_empty, unicode_safe],
+        "view_id": [not_empty, unicode_safe],
+        "job_id": [not_empty, unicode_safe],
+    }
+
+
+@validator_args
 def dimred_get_dimred_color_values_schema(
     not_empty: types.Validator,
     unicode_safe: types.Validator,
