@@ -139,6 +139,8 @@ General defaults:
 - `ckanext.dimred.allowed_methods` (default: `umap tsne pca`)
 - `ckanext.dimred.max_file_size_mb` (default: `50`)
 - `ckanext.dimred.max_rows` (default: `50000`; global upper bound for every method)
+- `ckanext.dimred.max_preview_payload_mb` (default: `8`; maximum compact JSON preview result before cache/RQ storage and browser rendering)
+- `ckanext.dimred.max_color_candidates` (default: `100`; maximum color-column descriptors; the selected `color_by` is always retained)
 - `ckanext.dimred.enable_categorical` (default: `true`)
 - `ckanext.dimred.max_categories_for_ohe` (default: `30`)
 - `ckanext.dimred.export_enabled` (default: `true`)
@@ -172,6 +174,15 @@ For every preview, dimred uses the lower of `ckanext.dimred.max_rows` and the
 selected method's `*.max_rows`. DataStore receives that limit through CKAN's
 `datastore_search`; CSV and TSV file resources use deterministic reservoir
 sampling while being read in chunks.
+
+The compact JSON result payload is checked before it is stored in Redis/RQ or
+rendered into the interactive preview; the Redis cache uses the same compact
+serialization. With the default three-decimal coordinates, source row IDs, and
+a 30-value categorical color column, a representative 50,000-row payload
+measures 1.66 MiB in 2D and 1.98 MiB in 3D; the 8 MiB default leaves headroom
+for real column names and values while rejecting unexpectedly large browser
+responses. Wide datasets keep only the first 100 eligible color candidates,
+with the selected color column retained first.
 
 Example:
 

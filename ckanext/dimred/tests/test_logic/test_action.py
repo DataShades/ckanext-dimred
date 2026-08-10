@@ -19,6 +19,7 @@ from ckanext.dimred.exception import (
     DimredFeatureError,
     DimredNumericColumnError,
     DimredPreviewError,
+    DimredPreviewPayloadError,
     DimredResourceSizeError,
 )
 from ckanext.dimred.logic import action as dimred_action
@@ -599,6 +600,43 @@ def test_color_candidates_respect_cardinality_limits(package, create_with_upload
     low_cat_candidate = next(c for c in candidates if c.get("name") == "low_cat")
     assert low_cat_candidate["kind"] == "categorical"
     assert set(low_cat_candidate["unique_values"]) == {"group0", "group1"}
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_color_candidates", "3")
+def test_color_candidate_limit_keeps_selected_column_first(package, create_with_upload):
+    csv_content = "\n".join(
+        ["x,y,chosen,category_a,category_b,category_c"]
+        + [f"{idx},{idx * 2},chosen-{idx},a-{idx % 2},b-{idx % 2},c-{idx % 2}" for idx in range(1, 6)]
+    )
+    resource = create_with_upload(csv_content.encode(), "wide.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", color_by="chosen")
+
+    result = _build_dimred_preview(resource["id"], view["id"])
+    prepare = result["meta"]["prepare_info"]
+
+    assert [candidate["name"] for candidate in prepare["color_candidates"]] == [
+        "chosen",
+        "category_a",
+        "category_b",
+    ]
+    assert prepare["color_candidates_total"] == 6
+    assert prepare["color_candidates_truncated"] == 3
+
+
+@pytest.mark.usefixtures("with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_preview_payload_mb", "1")
+def test_preview_payload_budget_accepts_exact_limit_and_rejects_one_extra_byte():
+    result = {"embedding": [[0.0, 0.0]], "meta": {"padding": ""}}
+    limit = dimred_action.dimred_config.max_preview_payload_bytes()
+    baseline_size = len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    result["meta"]["padding"] = "x" * (limit - baseline_size)
+
+    dimred_action._validate_preview_payload_size(result)
+
+    result["meta"]["padding"] += "x"
+    with pytest.raises(DimredPreviewPayloadError):
+        dimred_action._validate_preview_payload_size(result)
 
 
 @pytest.mark.usefixtures("with_plugins")

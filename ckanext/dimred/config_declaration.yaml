@@ -31,6 +31,22 @@ groups:
           Positive maximum number of rows to load from the resource when
           building the dimred preview.
 
+      - key: ckanext.dimred.max_preview_payload_mb
+        default: 8
+        type: int
+        validators: is_positive_integer
+        description: >
+          Positive maximum compact JSON size in MiB of a completed dimred preview
+          result before it is stored in cache/RQ or rendered in the browser.
+
+      - key: ckanext.dimred.max_color_candidates
+        default: 100
+        type: int
+        validators: is_positive_integer
+        description: >
+          Positive maximum number of color-column descriptors sent with a preview.
+          The explicitly selected color column is always retained.
+
       - key: ckanext.dimred.enable_categorical
         default: true
         type: bool

@@ -73,6 +73,9 @@ def _chart_state(page):
             return {
                 colorValues: data.map(point => point.__colorValue),
                 visualMap: option.visualMap,
+                progressive: option.series[0].progressive,
+                progressiveThreshold: option.series[0].progressiveThreshold,
+                animationThreshold: option.series[0].animationThreshold,
             };
         }"""
     )
@@ -114,6 +117,9 @@ def test_color_selector_lazy_loads_and_caches_values(page, base_url, package):
 
     initial_state = _chart_state(page)
     assert initial_state["colorValues"] == [XSS_LABEL, "second", "third", "fourth"]
+    assert initial_state["progressive"] == 500
+    assert initial_state["progressiveThreshold"] == 5000
+    assert initial_state["animationThreshold"] == 2000
     assert color_requests == []
     assert XSS_LABEL in _tooltip_text(page)
     assert page.evaluate("window.__dimredXss") == 0

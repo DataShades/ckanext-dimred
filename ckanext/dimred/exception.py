@@ -52,6 +52,12 @@ class DimredPreviewError(DimredError):
     default_message = "Dimred preview failed."
 
 
+class DimredPreviewPayloadError(DimredError):
+    """Raised when a preview result exceeds the configured output budget."""
+
+    default_message = "Dimred preview is too large to display safely."
+
+
 class DimredResourceSizeError(DimredError):
     """Raised when resource exceeds configured size limit."""
 

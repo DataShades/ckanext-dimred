@@ -111,6 +111,11 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 }),
                 encode: is3D ? { x: 0, y: 1, z: 2 } : { x: 0, y: 1 },
             };
+            if (!is3D) {
+                baseSeries.progressive = 500;
+                baseSeries.progressiveThreshold = 5000;
+                baseSeries.animationThreshold = 2000;
+            }
 
             var option;
             if (is3D) {

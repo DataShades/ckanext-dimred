@@ -24,6 +24,7 @@ from ckanext.dimred.exception import (
     DimredFeatureError,
     DimredNumericColumnError,
     DimredPreviewError,
+    DimredPreviewPayloadError,
     DimredRemoteFetchError,
 )
 from ckanext.dimred.logic import schema
@@ -210,6 +211,7 @@ def dimred_run_dimred_pipeline(context: Context, data_dict: DataDict) -> dict[st
     embedding_serializable = embedding.tolist()
 
     result = {"embedding": embedding_serializable, "meta": meta}
+    _validate_preview_payload_size(result)
     if cacheable:
         cache.save(resource_id, resource_view_id, settings_sig, result)
 
@@ -424,6 +426,8 @@ def _cache_settings(resource: dict[str, Any], resource_view: dict[str, Any]) -> 
         "effective_max_rows": dimred_config.effective_max_rows(method_name),
         "enable_categorical": dimred_config.enable_categorical(),
         "max_categories_for_ohe": dimred_config.max_categories_for_ohe(),
+        "max_preview_payload_bytes": dimred_config.max_preview_payload_bytes(),
+        "max_color_candidates": dimred_config.max_color_candidates(),
         "embedding_decimals": dimred_config.embedding_decimals(),
         "resource_fingerprint": _resource_cache_fingerprint(resource),
     }
@@ -626,7 +630,8 @@ def _prepare_matrix_from_resource(
     numeric_cols, categorical_cols, skipped_columns = _select_feature_columns(df, color_by, selected_features)
     if not numeric_cols:
         raise DimredNumericColumnError
-    color_candidates = _build_color_candidates(df, color_by, numeric_cols, categorical_cols)
+    all_color_candidates = _build_color_candidates(df, color_by, numeric_cols, categorical_cols)
+    color_candidates, omitted_color_candidates = _limit_color_candidates(all_color_candidates)
 
     df_features = _build_feature_frame(df, numeric_cols, categorical_cols)
 
@@ -650,6 +655,8 @@ def _prepare_matrix_from_resource(
         "feature_columns": numeric_cols + categorical_cols,
         "skipped_columns": skipped_columns,
         "color_candidates": color_candidates,
+        "color_candidates_total": len(all_color_candidates),
+        "color_candidates_truncated": omitted_color_candidates,
     }
 
     return x_matrix, info
@@ -959,8 +966,23 @@ def _color_candidate_for_column(
     """Return a color descriptor only when the column is available in the preview."""
     selected_features = _extract_selected_features(df, resource_view)
     numeric_cols, categorical_cols, _ = _select_feature_columns(df, _color_by_name(resource_view), selected_features)
-    candidates = _build_color_candidates(df, _color_by_name(resource_view), numeric_cols, categorical_cols)
+    candidates, _ = _limit_color_candidates(
+        _build_color_candidates(df, _color_by_name(resource_view), numeric_cols, categorical_cols)
+    )
     return next((candidate for candidate in candidates if candidate["name"] == column), None)
+
+
+def _limit_color_candidates(candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """Keep the configured number of ordered color candidates for the preview."""
+    limit = dimred_config.max_color_candidates()
+    return candidates[:limit], max(0, len(candidates) - limit)
+
+
+def _validate_preview_payload_size(result: dict[str, Any]) -> None:
+    """Reject a completed result that cannot fit within the browser output budget."""
+    payload = dimred_cache.serialize_preview_result(result).encode("utf-8")
+    if len(payload) > dimred_config.max_preview_payload_bytes():
+        raise DimredPreviewPayloadError
 
 
 def _infer_color_kind(series: pd.Series) -> str:

@@ -8,7 +8,9 @@ import pytest
 from ckan.plugins import toolkit as tk
 
 from ckanext.dimred import config as dimred_config
+from ckanext.dimred.exception import DimredPreviewPayloadError
 from ckanext.dimred.logic import action as dimred_action
+from ckanext.dimred.utils import cache as dimred_cache
 from ckanext.dimred.utils.cache import DimredCacheManager
 
 
@@ -25,6 +27,14 @@ class FakeCache:
 
     def save(self, resource_id, view_id, sig, result):
         self.store[(resource_id, view_id, sig)] = result
+
+
+class CapturingRedisClient:
+    def __init__(self):
+        self.payload = None
+
+    def setex(self, key, ttl, payload):
+        self.payload = payload
 
 
 def _upload_resource(**overrides):
@@ -49,6 +59,21 @@ def test_cache_settings_include_pipeline_schema_version():
     assert settings["method_params"]["n_neighbors"] == 15
     assert settings["effective_max_rows"] == 10000
     assert settings["embedding_decimals"] == dimred_config.embedding_decimals()
+    assert settings["max_preview_payload_bytes"] == dimred_config.max_preview_payload_bytes()
+    assert settings["max_color_candidates"] == dimred_config.max_color_candidates()
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_cache_stores_preview_with_payload_budget_serializer():
+    client = CapturingRedisClient()
+    manager = object.__new__(DimredCacheManager)
+    manager.client = client
+    result = {"embedding": [[1.0, 2.0]], "meta": {"method": "pca"}}
+
+    manager.save("r1", "v1", "settings", result)
+
+    assert client.payload == dimred_cache.serialize_preview_result(result)
+    assert client.payload == '{"embedding":[[1.0,2.0]],"meta":{"method":"pca"}}'
 
 
 @pytest.mark.usefixtures("with_plugins")
@@ -75,6 +100,26 @@ def test_pipeline_uses_cache(monkeypatch):
     assert calls["count"] == 1
     assert result1 == result2
     assert len(fake_cache.store) == 1
+
+
+@pytest.mark.usefixtures("with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_preview_payload_mb", "1")
+def test_pipeline_does_not_cache_oversized_preview(monkeypatch):
+    fake_cache = FakeCache()
+    monkeypatch.setattr("ckanext.dimred.utils.cache.get_cache", lambda: fake_cache)
+
+    def fake_build(resource, resource_view, context):
+        return np.array([[1.0, 2.0]]), {"method": resource_view["method"], "padding": "x" * (1024 * 1024)}
+
+    monkeypatch.setattr(dimred_action, "_build_dimred_preview", fake_build)
+
+    with pytest.raises(DimredPreviewPayloadError):
+        dimred_action.dimred_run_dimred_pipeline(
+            {"ignore_auth": True},
+            {"resource": _upload_resource(), "resource_view": {"id": "v1", "resource_id": "r1", "method": "umap"}},
+        )
+
+    assert fake_cache.store == {}
 
 
 @pytest.mark.usefixtures("with_plugins")

@@ -7,6 +7,8 @@ ALLOWED_METHODS = "ckanext.dimred.allowed_methods"
 
 MAX_FILE_SIZE_MB = "ckanext.dimred.max_file_size_mb"
 MAX_ROWS = "ckanext.dimred.max_rows"
+MAX_PREVIEW_PAYLOAD_MB = "ckanext.dimred.max_preview_payload_mb"
+MAX_COLOR_CANDIDATES = "ckanext.dimred.max_color_candidates"
 UMAP_MAX_ROWS = "ckanext.dimred.umap.max_rows"
 TSNE_MAX_ROWS = "ckanext.dimred.tsne.max_rows"
 PCA_MAX_ROWS = "ckanext.dimred.pca.max_rows"
@@ -49,6 +51,16 @@ def max_file_size_mb() -> int:
 def max_rows() -> int:
     """Maximum number of rows to load from the resource."""
     return tk.config[MAX_ROWS]
+
+
+def max_preview_payload_bytes() -> int:
+    """Maximum serialized preview result size in bytes."""
+    return int(tk.config[MAX_PREVIEW_PAYLOAD_MB]) * 1024 * 1024
+
+
+def max_color_candidates() -> int:
+    """Maximum color-column descriptors included in a preview result."""
+    return tk.config[MAX_COLOR_CANDIDATES]
 
 
 def method_max_rows(method_name: str) -> int:

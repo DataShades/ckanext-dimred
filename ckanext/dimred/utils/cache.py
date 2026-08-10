@@ -22,6 +22,11 @@ def _stable_dumps(data: dict[str, Any]) -> str:
     return json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def serialize_preview_result(result: dict[str, Any]) -> str:
+    """Serialize a preview result in the compact format used for its payload budget."""
+    return json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+
 class DimredCacheManager:
     """Small Redis-backed cache for dimred previews."""
 
@@ -77,7 +82,7 @@ class DimredCacheManager:
             return
         try:
             key = self._key(resource_id, view_id, settings_sig)
-            payload = json.dumps(result)
+            payload = serialize_preview_result(result)
             client.setex(key, self.ttl, payload)
         except (redis_exc.RedisError, TypeError, ValueError) as err:
             log.warning("Dimred cache save failed: %s", err)
