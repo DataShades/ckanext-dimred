@@ -56,6 +56,19 @@ must be enabled and stay within the configured category limit; otherwise the pre
 a `feature_columns` validation error. Leave all feature checkboxes unselected to use the
 eligible columns automatically.
 
+### Reading a preview
+
+Categorical colouring has a bounded legend; numeric colouring uses a continuous
+scale with the selected column name. The summary states whether all rows were
+used, a deterministic reservoir sample was taken, or a DataStore read was
+bounded by the effective row limit. It also reports feature preprocessing and
+automatic column skips.
+
+PCA previews show explained variance for each displayed component and their
+cumulative value. UMAP and t-SNE are exploratory projections: visible distance
+or apparent clusters are not, by themselves, evidence of a cluster structure.
+The same caution applies when a preview is based on sampled rows.
+
 ### Data quality
 
 Numeric columns with missing or infinite values are imputed before dimensionality reduction.

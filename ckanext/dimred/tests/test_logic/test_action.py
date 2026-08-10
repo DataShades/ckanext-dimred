@@ -92,6 +92,22 @@ def test_dimred_get_dimred_preview_pca(package, create_with_upload):
     result = _build_dimred_preview(resource["id"], view["id"])
 
     assert result["meta"]["method"] == "pca"
+    projection_info = result["meta"]["projection_info"]
+    assert len(projection_info["explained_variance_ratio"]) == 2
+    assert projection_info["explained_variance_cumulative"] == pytest.approx(
+        sum(projection_info["explained_variance_ratio"])
+    )
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_pca_constant_features_omit_undefined_variance(package, create_with_upload):
+    resource = create_with_upload(b"x,y\n1,2\n1,2\n1,2\n", "constant.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca")
+
+    result = _build_dimred_preview(resource["id"], view["id"])
+
+    assert "projection_info" not in result["meta"]
+    json.dumps(result, allow_nan=False)
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -126,6 +142,9 @@ def test_dimred_csv_sampling_preserves_deterministic_color_alignment(package, cr
 
     assert prepare["n_rows_original"] == 10
     assert prepare["n_rows_used"] == 3
+    assert prepare["n_rows_dropped"] == 7
+    assert prepare["row_limit"] == 3
+    assert prepare["sampling_method"] == "reservoir"
     assert prepare["source_row_ids"] == second["meta"]["prepare_info"]["source_row_ids"]
     assert colors["source_row_ids"] == prepare["source_row_ids"]
     assert colors["values"] == [f"row-{row_id}" for row_id in prepare["source_row_ids"]]

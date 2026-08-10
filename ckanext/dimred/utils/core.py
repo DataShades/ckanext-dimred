@@ -5,7 +5,7 @@ import io
 import logging
 import math
 from importlib import import_module
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -15,6 +15,21 @@ from ckanext.dimred.adapters import BaseAdapter, adapter_registry
 from ckanext.dimred.exception import DimredEmbeddingError
 
 log = logging.getLogger(__name__)
+
+CATEGORICAL_PALETTE = [
+    "#5470c6",
+    "#91cc75",
+    "#fac858",
+    "#ee6666",
+    "#73c0de",
+    "#3ba272",
+    "#fc8452",
+    "#9a60b4",
+    "#ea7ccc",
+]
+MISSING_COLOR = "#999999"
+NUMERIC_COLORMAP = "Blues"
+MAX_COLOR_LEGEND_ITEMS = 30
 
 
 collect_adapters_signal = tk.signals.ckanext.signal(
@@ -66,15 +81,19 @@ def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> st
     is_3d = embedding.shape[1] >= 3  # noqa PLR2004
 
     info = meta.get("prepare_info", {}) or {}
-    color_by = info.get("color_by")
-    color_values = info.get("color_values") or []
-
-    colors = _compute_colors(color_by, color_values, len(xs))
+    color_spec = _color_spec(info, len(xs))
 
     if is_3d:
-        fig, ax = _make_3d_figure(plt, xs, ys, embedding[:, 2], colors)
+        fig, ax, scatter = _make_3d_figure(plt, xs, ys, embedding[:, 2], color_spec)
     else:
-        fig, ax = _make_2d_figure(plt, xs, ys, colors)
+        fig, ax, scatter = _make_2d_figure(plt, xs, ys, color_spec)
+
+    if color_spec["kind"] == "numeric":
+        fig.colorbar(scatter, ax=ax, label=info.get("color_by") or "")
+    elif color_spec["legend"]:
+        for item in color_spec["legend"]:
+            ax.scatter([], [], s=30, c=item["color"], label=item["label"])
+        ax.legend(title=info.get("color_by") or None, loc="best", fontsize=8)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png")
@@ -85,30 +104,64 @@ def embedding_to_png_data_url(embedding: np.ndarray, meta: dict[str, Any]) -> st
     return "data:image/png;base64," + b64
 
 
-def _compute_colors(color_by: str | None, color_values: list[Any], n_points: int) -> list[str] | str:
-    """Return color mapping for points."""
-    if color_by and len(color_values) == n_points:
-        palette = [
-            "#1f77b4",
-            "#ff7f0e",
-            "#2ca02c",
-            "#d62728",
-            "#9467bd",
-            "#8c564b",
-            "#e377c2",
-            "#7f7f7f",
-            "#bcbd22",
-            "#17becf",
-        ]
-        color_map: dict[str, str] = {}
-        colors: list[str] = []
-        for label in color_values:
-            if label not in color_map:
-                idx = len(color_map) % len(palette)
-                color_map[label] = palette[idx]
-            colors.append(color_map[label])
-        return colors
-    return "#333333"
+def _color_spec(info: dict[str, Any], n_points: int) -> dict[str, Any]:
+    """Build shared categorical or numeric colour semantics for Matplotlib."""
+    color_values = info.get("color_values") or []
+    color_kind = info.get("color_kind")
+    if not info.get("color_by") or len(color_values) != n_points:
+        return {"kind": "uniform", "values": "#333333", "legend": []}
+
+    if color_kind == "numeric":
+        values = []
+        for value in color_values:
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                numeric = math.nan
+            values.append(numeric if math.isfinite(numeric) else math.nan)
+        numeric_values = np.asarray(values)
+        if not np.isfinite(numeric_values).any():
+            return {"kind": "uniform", "values": "#333333", "legend": []}
+        return {"kind": "numeric", "values": numeric_values, "legend": []}
+
+    known_labels = _color_legend_labels(info, color_values)
+    color_map = {
+        label: CATEGORICAL_PALETTE[index % len(CATEGORICAL_PALETTE)] for index, label in enumerate(known_labels)
+    }
+    colors: list[str] = []
+    has_missing = False
+    for value in color_values:
+        if value is None or value == "":
+            colors.append(MISSING_COLOR)
+            has_missing = True
+            continue
+        label = str(value)
+        if label not in color_map:
+            color_map[label] = CATEGORICAL_PALETTE[len(color_map) % len(CATEGORICAL_PALETTE)]
+        colors.append(color_map[label])
+    legend = [{"label": label, "color": color_map[label]} for label in known_labels]
+    if has_missing:
+        legend.append({"label": str(tk._("Missing")), "color": MISSING_COLOR})
+    return {"kind": "categorical", "values": colors, "legend": legend}
+
+
+def _color_legend_labels(info: dict[str, Any], color_values: list[Any]) -> list[str]:
+    """Return the bounded candidate labels in the same order as the frontend."""
+    color_by = info.get("color_by")
+    for candidate in info.get("color_candidates") or []:
+        if candidate.get("name") == color_by and candidate.get("kind") == "categorical":
+            return [str(value) for value in candidate.get("unique_values") or []]
+
+    labels: list[str] = []
+    for value in color_values:
+        if value is None or value == "":
+            continue
+        label = str(value)
+        if label not in labels:
+            labels.append(label)
+        if len(labels) == MAX_COLOR_LEGEND_ITEMS:
+            break
+    return labels
 
 
 def _axis_ticks(values: np.ndarray, n: int = 5) -> tuple[list[float], tuple[float, float]]:
@@ -122,11 +175,11 @@ def _axis_ticks(values: np.ndarray, n: int = 5) -> tuple[list[float], tuple[floa
     return ticks, (vmin, vmax)
 
 
-def _make_3d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, colors: list[str] | str):
+def _make_3d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, color_spec: dict[str, Any]):
     """Build a styled 3D matplotlib figure."""
     fig = plt.figure(figsize=(5, 4), dpi=100)
     ax = fig.add_subplot(111, projection="3d")
-    ax.scatter(xs, ys, zs, s=10, c=colors, depthshade=True)
+    scatter = _scatter(ax, xs, ys, zs, color_spec, depthshade=True)
     xticks, xlim = _axis_ticks(xs)
     yticks, ylim = _axis_ticks(ys)
     zticks, zlim = _axis_ticks(zs)
@@ -146,15 +199,15 @@ def _make_3d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, co
         axis._axinfo["grid"]["linewidth"] = 0.5  # type: ignore[attr-defined]
     ax.grid(True)
     fig.tight_layout()
-    return fig, ax
+    return fig, ax, scatter
 
 
-def _make_2d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, colors: list[str] | str):
+def _make_2d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, color_spec: dict[str, Any]):
     """Build a styled 2D matplotlib figure."""
     fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
     for spine in ax.spines.values():
         spine.set_visible(False)
-    ax.scatter(xs, ys, s=10, c=colors)
+    scatter = _scatter(ax, xs, ys, None, color_spec)
     xticks, xlim = _axis_ticks(xs)
     yticks, ylim = _axis_ticks(ys)
     ax.set_xlim(*xlim)
@@ -166,15 +219,37 @@ def _make_2d_figure(plt: Any, xs: np.ndarray, ys: np.ndarray, colors: list[str] 
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     fig.tight_layout()
-    return fig, ax
+    return fig, ax, scatter
 
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png")
-    plt.close(fig)
-    buf.seek(0)
 
-    b64 = base64.b64encode(buf.read()).decode("ascii")
-    return "data:image/png;base64," + b64
+def _scatter(
+    ax: Any,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    zs: np.ndarray | None,
+    color_spec: dict[str, Any],
+    **kwargs: Any,
+) -> Any:
+    """Draw a scatter plot with the selected colour contract."""
+    if color_spec["kind"] == "numeric":
+        values = cast(np.ndarray, color_spec["values"])
+        finite = np.isfinite(values)
+        cmap = import_module("matplotlib").colormaps[NUMERIC_COLORMAP].copy()
+        numeric_options: dict[str, Any] = {"s": 10, "c": values[finite], "cmap": cmap, **kwargs}
+        if zs is None:
+            scatter = ax.scatter(xs[finite], ys[finite], **numeric_options)
+            if not finite.all():
+                ax.scatter(xs[~finite], ys[~finite], s=10, c=MISSING_COLOR, **kwargs)
+        else:
+            scatter = ax.scatter(xs[finite], ys[finite], zs[finite], **numeric_options)
+            if not finite.all():
+                ax.scatter(xs[~finite], ys[~finite], zs[~finite], s=10, c=MISSING_COLOR, **kwargs)
+        return scatter
+
+    options: dict[str, Any] = {"s": 10, "c": color_spec["values"], **kwargs}
+    if zs is None:
+        return ax.scatter(xs, ys, **options)
+    return ax.scatter(xs, ys, zs, **options)
 
 
 def embedding_summary(embedding: np.ndarray | None, meta: dict[str, Any], top_n: int = 5) -> dict[str, Any]:
@@ -206,7 +281,7 @@ def embedding_summary(embedding: np.ndarray | None, meta: dict[str, Any], top_n:
     n_classes = None
     top_classes: list[dict[str, Any]] = []
 
-    if color_by and len(color_values) == n_points:
+    if color_by and info.get("color_kind") != "numeric" and len(color_values) == n_points:
         counts: dict[str, int] = {}
         for val in color_values:
             key = str(val)
@@ -243,12 +318,20 @@ def build_display_summary(
     categorical_used = info.get("categorical_used") or []
 
     method_components = summary.get("n_dims") or method_params.get("n_components")
+    skipped_columns = info.get("skipped_columns") or []
+    skipped_reasons = _skipped_reason_counts(skipped_columns)
+    dropped_rows = info.get("n_rows_dropped", max((rows_original or 0) - (rows_used or 0), 0))
+    warnings = _analysis_warning_codes(meta.get("method"), dropped_rows, numeric_used, categorical_used)
+    projection_info = (meta or {}).get("projection_info") or {}
 
     return {
         "method": meta.get("method"),
         "components": method_components,
         "rows_used": rows_used,
         "rows_original": rows_original,
+        "rows_dropped": dropped_rows,
+        "row_limit": info.get("row_limit"),
+        "sampling_method": info.get("sampling_method", "all_rows"),
         "points": n_points,
         "color_by": color_by,
         "classes": summary.get("n_classes"),
@@ -261,4 +344,37 @@ def build_display_summary(
         "numeric_more": max(len(numeric_used) - top_n_columns, 0),
         "categorical_sample": categorical_used[:top_n_columns],
         "categorical_more": max(len(categorical_used) - top_n_columns, 0),
+        "skipped_count": len(skipped_columns),
+        "skipped_reasons": skipped_reasons,
+        "pca_variance": projection_info.get("explained_variance_ratio") or [],
+        "pca_variance_cumulative": projection_info.get("explained_variance_cumulative"),
+        "warnings": warnings,
     }
+
+
+def _skipped_reason_counts(skipped_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Count automatic feature skips by their stable pipeline reason."""
+    counts: dict[str, int] = {}
+    for column in skipped_columns:
+        reason = str(column.get("reason") or "other")
+        counts[reason] = counts.get(reason, 0) + 1
+    return [{"reason": reason, "count": count} for reason, count in counts.items()]
+
+
+def _analysis_warning_codes(
+    method: Any,
+    dropped_rows: int,
+    numeric_used: list[str],
+    categorical_used: list[str],
+) -> list[str]:
+    """Return concise, display-ready warning codes for a preview."""
+    warnings: list[str] = []
+    if method in {"umap", "tsne"}:
+        warnings.append("projection_interpretation")
+    if dropped_rows:
+        warnings.append("sampled_rows")
+    if numeric_used:
+        warnings.append("numeric_standardized")
+    if categorical_used:
+        warnings.append("categorical_one_hot")
+    return warnings

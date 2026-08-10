@@ -25,6 +25,42 @@
     height: 26rem;
 }
 
+.dimred-color-legend {
+    margin: 0 0 1rem;
+}
+
+.dimred-color-legend:empty {
+    display: none;
+}
+
+.dimred-color-legend h4 {
+    font-size: 1em;
+    margin: 0 0 0.25rem;
+}
+
+.dimred-color-legend ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dimred-color-legend li {
+    align-items: center;
+    display: flex;
+    gap: 0.25rem;
+}
+
+.dimred-color-legend__swatch {
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    display: inline-block;
+    height: 0.75rem;
+    width: 0.75rem;
+}
+
 .dimred-meta {
     color: #444;
 }

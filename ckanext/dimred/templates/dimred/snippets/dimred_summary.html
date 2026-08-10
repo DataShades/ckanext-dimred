@@ -23,6 +23,20 @@
                     {% endif %}
                 </li>
             {% endif %}
+            {% if summary.sampling_method %}
+                <li>
+                    <strong>{{ _('Sampling') }}:</strong>
+                    {% if summary.sampling_method == 'reservoir' %}
+                        {{ _('Deterministic reservoir sample') }}
+                    {% elif summary.sampling_method == 'datastore_limit' %}
+                        {{ _('Bounded DataStore read') }}
+                    {% else %}
+                        {{ _('All rows') }}
+                    {% endif %}
+                    {% if summary.row_limit %} ({{ _('limit') }}: {{ summary.row_limit }}){% endif %}
+                    {% if summary.rows_dropped %}, {{ _('rows not included') }}: {{ summary.rows_dropped }}{% endif %}
+                </li>
+            {% endif %}
             {% if summary.color_by %}
                 {% if summary.classes %}
                     <li>
@@ -78,6 +92,57 @@
                                 {{ _('more') }}{% endif %}
                 </li>
             {% endif %}
+            {% if summary.skipped_count %}
+                {% set skipped_labels = {
+                    'used for color only': _('used for color only'),
+                    'empty': _('no finite values'),
+                    'mixed': _('mixed numeric and text values'),
+                    'datetime': _('datetime values'),
+                    'categorical-disabled': _('categorical features disabled'),
+                    'fewer than 2 distinct values': _('fewer than two distinct values'),
+                    'too many categories': _('too many categories')
+                } %}
+                <li>
+                    <strong>{{ _('Skipped columns') }}:</strong> {{ summary.skipped_count }}
+                    {% for item in summary.skipped_reasons %}
+                        {% if loop.first %} ({% else %}; {% endif %}
+                        {{ skipped_labels.get(item.reason, item.reason) }}: {{ item.count }}
+                        {% if loop.last %}){% endif %}
+                    {% endfor %}
+                </li>
+            {% endif %}
+            {% if summary.pca_variance %}
+                <li>
+                    <strong>{{ _('PCA explained variance') }}:</strong>
+                    {% for ratio in summary.pca_variance %}
+                        {{ _('component') }} {{ loop.index }}: {{ '%.1f'|format(ratio * 100) }}%{% if not loop.last %};{% endif %}
+                    {% endfor %}
+                    {% if summary.pca_variance_cumulative is not none %}
+                        ({{ _('cumulative') }}: {{ '%.1f'|format(summary.pca_variance_cumulative * 100) }}%)
+                    {% endif %}
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+{% endif %}
+
+{% if summary.warnings %}
+    <div class="alert alert-info dimred-interpretation-notes" role="note">
+        <h4>{{ _('Interpretation notes') }}</h4>
+        <ul>
+            {% for warning in summary.warnings %}
+                <li>
+                    {% if warning == 'projection_interpretation' %}
+                        {{ _('Distances and visible clusters in UMAP or t-SNE are exploratory and do not by themselves prove cluster structure.') }}
+                    {% elif warning == 'sampled_rows' %}
+                        {{ _('This preview uses sampled rows and does not represent every source record.') }}
+                    {% elif warning == 'numeric_standardized' %}
+                        {{ _('Numeric features are standardized before dimensionality reduction.') }}
+                    {% elif warning == 'categorical_one_hot' %}
+                        {{ _('Eligible categorical features are one-hot encoded before dimensionality reduction.') }}
+                    {% endif %}
+                </li>
+            {% endfor %}
         </ul>
     </div>
 {% endif %}

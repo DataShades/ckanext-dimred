@@ -25,7 +25,7 @@ def _create_public_dimred_view(package):
                 f"1,10,10,{XSS_LABEL}\n"
                 "2,20,20,second\n"
                 "3,30,30,third\n"
-                "4,40,40,fourth\n"
+                "4,40,,fourth\n"
             ).encode()
         ),
         filename="colors.csv",
@@ -72,6 +72,7 @@ def _chart_state(page):
             const data = option.series[0].data;
             return {
                 colorValues: data.map(point => point.__colorValue),
+                itemColors: data.map(point => (point.itemStyle && point.itemStyle.color) || null),
                 visualMap: option.visualMap,
                 progressive: option.series[0].progressive,
                 progressiveThreshold: option.series[0].progressiveThreshold,
@@ -123,6 +124,15 @@ def test_color_selector_lazy_loads_and_caches_values(page, base_url, package):
     assert color_requests == []
     assert XSS_LABEL in _tooltip_text(page)
     assert page.evaluate("window.__dimredXss") == 0
+    legend = page.locator("#dimred-color-legend")
+    expect(legend).to_contain_text("Legend: label")
+    expect(legend).to_contain_text(XSS_LABEL)
+    summary = page.locator(".dimred-summary")
+    expect(summary).to_contain_text("Sampling: All rows")
+    expect(summary).to_contain_text("PCA explained variance")
+    expect(page.locator(".dimred-interpretation-notes")).to_contain_text(
+        "Numeric features are standardized before dimensionality reduction."
+    )
 
     with page.expect_response(lambda response: _is_color_action(response.url) and response.ok):
         selector.select_option("score")
@@ -132,7 +142,10 @@ def test_color_selector_lazy_loads_and_caches_values(page, base_url, package):
     }""")
 
     numeric_state = _chart_state(page)
-    assert numeric_state["colorValues"] == [10.0, 20.0, 30.0, 40.0]
+    assert numeric_state["colorValues"] == [10.0, 20.0, 30.0, None]
+    assert numeric_state["itemColors"] == [None, None, None, "#999999"]
+    assert numeric_state["visualMap"][0]["text"] == ["score", ""]
+    expect(legend).to_be_hidden()
     assert len(color_requests) == 1
 
     selector.select_option("")

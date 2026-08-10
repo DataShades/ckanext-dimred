@@ -4,6 +4,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
         initialize: function () {
             var container = $("#dimred-js-render");
             var selectContainer = $("#dimred-color-select");
+            var legendContainer = $("#dimred-color-legend");
 
             if (!container.length) {
                 console.error("dimred-view-echarts: container not found");
@@ -56,6 +57,8 @@ this.ckan.module("dimred-view-echarts", function ($) {
             ];
             var baseColor = palette[0];
             var missingColor = "#999999";
+            var legendTitle = legendContainer.attr("data-title") || "Legend";
+            var missingLabel = legendContainer.attr("data-missing-label") || "Missing";
 
             var firstPoint = embedding[0] || [];
             var is3D = Array.isArray(firstPoint) && firstPoint.length >= 3;
@@ -172,6 +175,45 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     colorState.kind = kind || null;
                 };
 
+                var clearColorLegend = function () {
+                    if (legendContainer.length) {
+                        legendContainer.empty().hide();
+                    }
+                };
+
+                var renderCategoricalLegend = function (candidate, colorMap, values) {
+                    if (!legendContainer.length) {
+                        return;
+                    }
+                    var knownValues = Array.isArray(candidate.unique_values) ? candidate.unique_values : [];
+                    var list = $("<ul></ul>");
+                    $.each(knownValues, function (_, value) {
+                        if (!colorMap[value]) {
+                            return;
+                        }
+                        var item = $("<li></li>");
+                        item.append($("<span></span>").addClass("dimred-color-legend__swatch").css("background-color", colorMap[value]));
+                        item.append($("<span></span>").text(value));
+                        list.append(item);
+                    });
+                    var hasMissing = values.some(function (value) {
+                        return value === null || value === undefined || value === "";
+                    });
+                    if (hasMissing) {
+                        var missingItem = $("<li></li>");
+                        missingItem.append($("<span></span>").addClass("dimred-color-legend__swatch").css("background-color", missingColor));
+                        missingItem.append($("<span></span>").text(missingLabel));
+                        list.append(missingItem);
+                    }
+                    if (!list.children().length) {
+                        clearColorLegend();
+                        return;
+                    }
+                    legendContainer.empty();
+                    legendContainer.append($("<h4></h4>").text(legendTitle + ": " + candidate.name));
+                    legendContainer.append(list).show();
+                };
+
                 var applyUniformColor = function () {
                     var data = $.map(baseCoords, function (coords, idx) {
                         var c = (coords || []).slice(0);
@@ -184,6 +226,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         };
                     });
                     setColorState(null, null);
+                    clearColorLegend();
                     var newOption = cloneBaseOption();
                     newOption.visualMap = [];
                     newOption.series[0].data = data;
@@ -228,6 +271,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     });
 
                     setColorState(candidate.name, "categorical");
+                    renderCategoricalLegend(candidate, colorMap, values);
                     var newOption = cloneBaseOption();
                     newOption.visualMap = [];
                     newOption.series[0].data = data;
@@ -268,15 +312,20 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         var c = (coords || []).slice(0);
                         var valueWithColor = c.slice(0);
                         valueWithColor.push(numericVal);
-                        data.push({
+                        var point = {
                             value: valueWithColor,
                             __coords: c,
                             __sourceRowId: sourceRowIds[idx],
                             __colorValue: numericVal,
-                        });
+                        };
+                        if (numericVal === null) {
+                            point.itemStyle = { color: missingColor };
+                        }
+                        data.push(point);
                     });
 
                     setColorState(candidate.name, "numeric");
+                    clearColorLegend();
                     var newOption = cloneBaseOption();
                     newOption.visualMap = [
                         {
@@ -285,6 +334,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             max: maxVal,
                             dimension: is3D ? 3 : 2,
                             calculable: true,
+                            text: [candidate.name, ""],
                             inRange: {
                                 color: ["#d2e9f7", "#0b62c3"],
                             },
@@ -436,6 +486,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     });
 
                     setColorState(hasLabels ? colorBy : null, hasLabels ? "categorical" : null);
+                    clearColorLegend();
                     var newOption = cloneBaseOption();
                     newOption.visualMap = [];
                     newOption.series[0].data = data;

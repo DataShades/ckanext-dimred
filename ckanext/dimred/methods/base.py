@@ -43,3 +43,7 @@ class BaseProjectionMethod(ABC):
         :return: Embedding matrix.
         """
         raise NotImplementedError
+
+    def result_metadata(self) -> dict[str, Any]:
+        """Return compact method-specific metadata after fitting, when available."""
+        return {}

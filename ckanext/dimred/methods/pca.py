@@ -35,3 +35,14 @@ class PCAProjection(BaseProjectionMethod):
     def fit_transform(self, x_matrix: np.ndarray):
         """Run PCA and return the embedding matrix."""
         return self._reducer.fit_transform(x_matrix)
+
+    def result_metadata(self) -> dict[str, Any]:
+        """Return explained variance for the fitted PCA components."""
+        ratios = self._reducer.explained_variance_ratio_
+        if not np.isfinite(ratios).all():
+            return {}
+        values = [float(value) for value in ratios]
+        return {
+            "explained_variance_ratio": values,
+            "explained_variance_cumulative": float(sum(values)),
+        }

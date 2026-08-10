@@ -45,7 +45,7 @@ METHOD_PARAM_NAMES = {
     "umap": {"min_dist", "n_components", "n_neighbors", "random_state"},
 }
 
-PIPELINE_SCHEMA_VERSION = 1
+PIPELINE_SCHEMA_VERSION = 2
 PREVIEW_QUEUE = "dimred"
 PREVIEW_JOB_RESULT_TTL = 3600
 PREVIEW_ENQUEUE_LOCK_TTL = 60
@@ -383,6 +383,9 @@ def _build_dimred_preview(
         "method_params": reducer.params,
         "prepare_info": prepare_info,
     }
+    projection_info = reducer.result_metadata()
+    if projection_info:
+        meta["projection_info"] = projection_info
 
     return embedding, meta
 
@@ -624,7 +627,7 @@ def _prepare_matrix_from_resource(
     df, source_row_ids, n_rows_original = _load_dataframe(context, resource, resource_view, row_limit)
     df, source_row_ids = _maybe_limit_rows(df, source_row_ids, row_limit)
 
-    color_by, color_values = _extract_color_info(df, resource_view)
+    color_by, color_values, color_kind = _extract_color_info(df, resource_view)
     selected_features = _extract_selected_features(df, resource_view)
 
     numeric_cols, categorical_cols, skipped_columns = _select_feature_columns(df, color_by, selected_features)
@@ -645,12 +648,15 @@ def _prepare_matrix_from_resource(
     info: dict[str, Any] = {
         "n_rows_original": n_rows_original,
         "n_rows_used": len(df),
+        "n_rows_dropped": max(n_rows_original - len(df), 0),
         "row_limit": row_limit,
+        "sampling_method": _sampling_method(resource, n_rows_original, len(df)),
         "source_row_ids": source_row_ids,
         "n_features": x_matrix.shape[1],
         "numeric_used": numeric_cols,
         "categorical_used": categorical_cols,
         "color_by": color_by or None,
+        "color_kind": color_kind,
         "color_values": color_values,
         "feature_columns": numeric_cols + categorical_cols,
         "skipped_columns": skipped_columns,
@@ -732,17 +738,29 @@ def _maybe_limit_rows(
     return sampled.reset_index(drop=True), sampled_row_ids
 
 
-def _extract_color_info(df: pd.DataFrame, resource_view: dict[str, Any]) -> tuple[str, list[Any] | None]:
+def _extract_color_info(
+    df: pd.DataFrame,
+    resource_view: dict[str, Any],
+) -> tuple[str, list[Any] | None, str | None]:
     """Extract color_by and corresponding values."""
     color_by = _color_by_name(resource_view)
     if not color_by:
-        return "", None
+        return "", None, None
     if color_by not in df.columns:
         raise tk.ValidationError({"color_by": [f"Unknown color column: {color_by}."]})
 
     series = cast(pd.Series, df[color_by])
     kind = _infer_color_kind(series)
-    return color_by, _serialize_color_values(series, kind)
+    return color_by, _serialize_color_values(series, kind), kind
+
+
+def _sampling_method(resource: dict[str, Any], n_rows_original: int, n_rows_used: int) -> str:
+    """Describe the bounded loading strategy used for display metadata."""
+    if n_rows_original <= n_rows_used:
+        return "all_rows"
+    if resource.get("datastore_active"):
+        return "datastore_limit"
+    return "reservoir"
 
 
 def _color_by_name(resource_view: dict[str, Any]) -> str:
