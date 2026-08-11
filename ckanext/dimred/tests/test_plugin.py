@@ -57,6 +57,14 @@ def test_form_renders_method_parameter_controls(app):
     assert 'data-dimred-param="perplexity" step="any"' in response
     assert 'data-dimred-param="min_dist" step="any"' in response
     assert 'data-module-defaults=' in response
+    assert 'id="dimred-workload-preflight"' in response
+    assert 'class="alert alert-info dimred-workload-preflight"' in response
+    assert 'data-module-workload-profiles=' in response
+    assert "Configured maximum:" in response
+    assert "Reference benchmark:" in response
+    assert "Benchmark parameters:" in response
+    assert "n_neighbors=15, min_dist=0.1, n_components=2, random_state=42" in response
+    assert "not a runtime prediction" in response
     assert "Method-specific parameters (JSON)" not in response
 
 

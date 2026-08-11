@@ -10,6 +10,30 @@ from ckanext.dimred import utils as dimred_utils
 from ckanext.dimred.exception import DimredError
 from ckanext.dimred.methods import get_projection_method
 
+WORKLOAD_REFERENCES = {
+    "pca": {
+        "rows": 50_000,
+        "features": 10,
+        "wall_seconds": 0.13,
+        "peak_rss_mb": 216,
+        "params": {"n_components": 2, "whiten": False, "random_state": 42},
+    },
+    "umap": {
+        "rows": 10_000,
+        "features": 10,
+        "wall_seconds": 41.87,
+        "peak_rss_mb": 551,
+        "params": {"n_neighbors": 15, "min_dist": 0.1, "n_components": 2, "random_state": 42},
+    },
+    "tsne": {
+        "rows": 2_000,
+        "features": 10,
+        "wall_seconds": 5.74,
+        "peak_rss_mb": 213,
+        "params": {"perplexity": 30, "n_components": 2, "random_state": 42},
+    },
+}
+
 
 class ColumnAdapter(Protocol):
     """Minimal adapter interface needed to populate form column options."""
@@ -25,6 +49,37 @@ def dimred_allowed_methods() -> list[str]:
 def dimred_default_method() -> str:
     """Return the default dimred method from config."""
     return dimred_config.default_method()
+
+
+def dimred_workload_profiles() -> dict[str, dict[str, Any]]:
+    """Return configured limits with the documented local benchmark references.
+
+    Reference measurements come from ``docs/benchmarks/workload-budgets.md``.
+    They describe the documented benchmark host rather than predicting a
+    resource's actual runtime.
+    """
+    profiles = {}
+    for method in dimred_config.allowed_methods():
+        reference = WORKLOAD_REFERENCES.get(method)
+        if reference is None:
+            continue
+        profiles[method] = {
+            "label": dimred_method_label(method),
+            "max_rows": dimred_config.effective_max_rows(method),
+            "reference": {
+                **reference,
+                "params_text": _workload_params_text(reference["params"]),
+            },
+        }
+    return profiles
+
+
+def _workload_params_text(params: dict[str, Any]) -> str:
+    """Format the fixed parameters used for one documented benchmark run."""
+    return ", ".join(
+        f"{name}={str(value).lower() if isinstance(value, bool) else value}"
+        for name, value in params.items()
+    )
 
 
 def dimred_allowed_methods_options() -> list[dict[str, str]]:

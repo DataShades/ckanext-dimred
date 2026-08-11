@@ -12,11 +12,14 @@ ckan.module("dimred-view-form", function ($) {
             this.paramsField = $("#field-method-params");
             this.colorSelect = $("#field-color_by");
             this.featureColumnsSelect = $("#field-feature-columns");
+            this.workloadPreflight = $("#dimred-workload-preflight");
             this.selectAllFeaturesButton = $("#dimred-select-all-features");
             this.clearFeaturesButton = $("#dimred-clear-features");
             this.resetButton = $("#dimred-reset-method-params");
             this.paramFields = this.container.find("[data-dimred-param]");
             this.defaults = this._parseDefaults(this.options.defaults || this.container.attr("data-module-defaults"));
+            this.workloadProfiles = this._parseDefaults(this.workloadPreflight.attr("data-module-workload-profiles"));
+            this.automaticFeaturesLabel = this.workloadPreflight.attr("data-module-automatic-features") || "automatic";
 
             if (!this.methodSelect.length || !this.paramsField.length) {
                 return;
@@ -24,6 +27,7 @@ ckan.module("dimred-view-form", function ($) {
 
             this.methodSelect.on("change", this._onMethodChange.bind(this));
             this.colorSelect.on("change", this._excludeColorFromFeatures.bind(this));
+            this.featureColumnsSelect.on("change", this._updateWorkloadPreflight.bind(this));
             this.selectAllFeaturesButton.on("click", this._selectAllFeatures.bind(this));
             this.clearFeaturesButton.on("click", this._clearFeatures.bind(this));
             this.paramFields.on("change input", this._syncParams.bind(this));
@@ -31,6 +35,7 @@ ckan.module("dimred-view-form", function ($) {
             this.container.closest("form").on("submit", this._syncParams.bind(this));
 
             this._showMethodFields(this.methodSelect.val());
+            this._updateWorkloadPreflight();
         },
 
         _parseDefaults: function (defaults) {
@@ -49,11 +54,13 @@ ckan.module("dimred-view-form", function ($) {
             this._applyMethodDefaults(method);
             this._showMethodFields(method);
             this._syncParams();
+            this._updateWorkloadPreflight();
         },
 
         _resetCurrentMethod: function () {
             this._applyMethodDefaults(this.methodSelect.val());
             this._syncParams();
+            this._updateWorkloadPreflight();
         },
 
         _applyMethodDefaults: function (method) {
@@ -140,6 +147,33 @@ ckan.module("dimred-view-form", function ($) {
             if (this.featureColumnsSelect.length) {
                 this.featureColumnsSelect.val([]).trigger("change");
             }
+        },
+
+        _updateWorkloadPreflight: function () {
+            if (!this.workloadPreflight.length) {
+                return;
+            }
+
+            var profile = this.workloadProfiles[this.methodSelect.val()];
+            if (!profile) {
+                this.workloadPreflight.prop("hidden", true);
+                return;
+            }
+
+            var reference = profile.reference;
+            var selectedFeatures = this.featureColumnsSelect.val() || [];
+            var featureLabel = selectedFeatures.length ? selectedFeatures.length : this.automaticFeaturesLabel;
+
+            this.workloadPreflight.prop("hidden", false);
+            this.workloadPreflight.find("[data-dimred-workload-limit]").text(profile.max_rows);
+            this.workloadPreflight.find("[data-dimred-workload-method]").text(profile.label);
+            this.workloadPreflight.find("[data-dimred-workload-features]").text(featureLabel);
+            this.workloadPreflight.find("[data-dimred-workload-reference-method]").text(profile.label);
+            this.workloadPreflight.find("[data-dimred-workload-reference-rows]").text(reference.rows);
+            this.workloadPreflight.find("[data-dimred-workload-reference-features]").text(reference.features);
+            this.workloadPreflight.find("[data-dimred-workload-reference-time]").text(reference.wall_seconds.toFixed(2));
+            this.workloadPreflight.find("[data-dimred-workload-reference-rss]").text(reference.peak_rss_mb);
+            this.workloadPreflight.find("[data-dimred-workload-reference-params]").text(reference.params_text);
         },
     };
 });

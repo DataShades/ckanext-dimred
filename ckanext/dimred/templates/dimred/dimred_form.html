@@ -18,6 +18,8 @@
     {% set n_components_value = default_params_full.get('n_components', 2) %}
 {% endif %}
 {% set defaults_map = h.dimred_methods_defaults() %}
+{% set workload_profiles = h.dimred_workload_profiles() %}
+{% set workload_profile = workload_profiles.get(method_for_defaults) %}
 {% set selected_features = data.get('feature_columns', resource_view.feature_columns) if resource_view else data.get('feature_columns') %}
 {% if selected_features is string %}
     {% set selected_features = selected_features.split(',') %}
@@ -65,6 +67,39 @@
             {% endif %}
         </div>
     </div>
+{% endif %}
+
+{% if workload_profile %}
+    <section
+            class="alert alert-info dimred-workload-preflight"
+            id="dimred-workload-preflight"
+            data-module-workload-profiles="{{ h.dump_json(workload_profiles) }}"
+            data-module-automatic-features="{{ _('automatic') }}"
+    >
+        <strong>{{ _('Preview workload') }}</strong>
+        <p>
+            {{ _('Configured maximum:') }}
+            <strong data-dimred-workload-limit>{{ workload_profile.max_rows }}</strong>
+            {{ _('rows processed for') }}
+            <strong data-dimred-workload-method>{{ workload_profile.label }}</strong>.
+            {{ _('Feature columns:') }}
+            <strong data-dimred-workload-features>{% if selected_features %}{{ selected_features|length }}{% else %}{{ _('automatic') }}{% endif %}</strong>.
+        </p>
+        <p>
+            {{ _('Reference benchmark:') }}
+            <span data-dimred-workload-reference-method>{{ workload_profile.label }}</span>
+            <span data-dimred-workload-reference-rows>{{ workload_profile.reference.rows }}</span> ×
+            <span data-dimred-workload-reference-features>{{ workload_profile.reference.features }}</span>
+            {{ _('features on the documented benchmark host:') }}
+            <span data-dimred-workload-reference-time>{{ '%.2f'|format(workload_profile.reference.wall_seconds) }}</span> s,
+            <span data-dimred-workload-reference-rss>{{ workload_profile.reference.peak_rss_mb }}</span> MiB RSS.
+        </p>
+        <p>
+            {{ _('Benchmark parameters:') }}
+            <span data-dimred-workload-reference-params>{{ workload_profile.reference.params_text }}</span>.
+            {{ _('This is a reference measurement, not a runtime prediction for this dataset or deployment.') }}
+        </p>
+    </section>
 {% endif %}
 
 <div class="form-group control-group">
@@ -201,19 +236,23 @@
         ) }}
     </div>
 
-    <button class="btn btn-default" type="button" id="dimred-reset-method-params">
-        {{ _('Reset method defaults') }}
-    </button>
-    {% set method_params_errors = errors.get('method_params') if errors else [] %}
-    {% if method_params_errors %}
-        <strong class="error-inline">
-            {% if method_params_errors is string %}
-                {{ method_params_errors }}
-            {% else %}
-                {{ method_params_errors|join(', ') }}
+    <div class="form-group control-group">
+        <div class="controls">
+            <button class="btn btn-default" type="button" id="dimred-reset-method-params">
+                {{ _('Reset method defaults') }}
+            </button>
+            {% set method_params_errors = errors.get('method_params') if errors else [] %}
+            {% if method_params_errors %}
+                <strong class="error-inline">
+                    {% if method_params_errors is string %}
+                        {{ method_params_errors }}
+                    {% else %}
+                        {{ method_params_errors|join(', ') }}
+                    {% endif %}
+                </strong>
             {% endif %}
-        </strong>
-    {% endif %}
+        </div>
+    </div>
 </div>
 
 <div class="form-group control-group">

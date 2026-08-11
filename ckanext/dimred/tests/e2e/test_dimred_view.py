@@ -241,10 +241,21 @@ def test_method_parameter_controls_switch_reset_and_serialize(app, page, base_ur
         }"""
     )
 
+    preflight = page.locator("#dimred-workload-preflight")
+    expect(preflight.locator("[data-dimred-workload-method]")).to_have_text("UMAP")
+    expect(preflight.locator("[data-dimred-workload-limit]")).to_have_text("10000")
+    expect(preflight.locator("[data-dimred-workload-features]")).to_have_text("automatic")
+
     page.locator("#field-method").select_option("tsne")
     expect(page.locator('[data-dimred-method="tsne"]')).to_be_visible()
     expect(page.locator('[data-dimred-method="pca"]')).to_be_hidden()
     expect(page.locator("#field-n-components")).to_have_value("2")
+    expect(preflight.locator("[data-dimred-workload-method]")).to_have_text("t-SNE")
+    expect(preflight.locator("[data-dimred-workload-limit]")).to_have_text("2000")
+    expect(preflight.locator("[data-dimred-workload-reference-time]")).to_have_text("5.74")
+    expect(preflight.locator("[data-dimred-workload-reference-params]")).to_have_text(
+        "perplexity=30, n_components=2, random_state=42"
+    )
 
     page.locator("#field-method-param-perplexity").fill("12.5")
     expect(page.locator("#field-method-params")).to_have_value('{"random_state":42,"perplexity":12.5}')
@@ -258,14 +269,17 @@ def test_method_parameter_controls_switch_reset_and_serialize(app, page, base_ur
     assert page.locator("#field-feature-columns").evaluate(
         "select => Array.from(select.selectedOptions, option => option.value)"
     ) == ["score"]
+    expect(preflight.locator("[data-dimred-workload-features]")).to_have_text("1")
 
     page.locator("#field-color_by").select_option("label")
     page.locator("#dimred-select-all-features").click()
     assert page.locator("#field-feature-columns").evaluate(
         "select => Array.from(select.selectedOptions, option => option.value)"
     ) == ["x", "y", "score"]
+    expect(preflight.locator("[data-dimred-workload-features]")).to_have_text("3")
 
     page.locator("#dimred-clear-features").click()
     assert page.locator("#field-feature-columns").evaluate(
         "select => Array.from(select.selectedOptions, option => option.value)"
     ) == []
+    expect(preflight.locator("[data-dimred-workload-features]")).to_have_text("automatic")

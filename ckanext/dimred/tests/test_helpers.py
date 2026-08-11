@@ -105,6 +105,27 @@ def test_methods_defaults_include_n_components_for_method_switching():
     assert all("n_components" in defaults for defaults in helpers.dimred_methods_defaults().values())
 
 
+@pytest.mark.usefixtures("with_plugins")
+@pytest.mark.ckan_config("ckanext.dimred.max_rows", 6_000)
+@pytest.mark.ckan_config("ckanext.dimred.umap.max_rows", 5_000)
+def test_workload_profiles_use_effective_configured_limits():
+    profiles = helpers.dimred_workload_profiles()
+
+    assert profiles["umap"] == {
+        "label": "UMAP",
+        "max_rows": 5_000,
+        "reference": {
+            "rows": 10_000,
+            "features": 10,
+            "wall_seconds": 41.87,
+            "peak_rss_mb": 551,
+            "params": {"n_neighbors": 15, "min_dist": 0.1, "n_components": 2, "random_state": 42},
+            "params_text": "n_neighbors=15, min_dist=0.1, n_components=2, random_state=42",
+        },
+    }
+    assert profiles["pca"]["max_rows"] == 6_000
+
+
 @pytest.mark.usefixtures("clean_db", "clean_datastore", "with_plugins")
 @pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
 def test_resource_options_use_datastore_columns(app, package):
