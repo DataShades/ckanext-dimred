@@ -9,6 +9,8 @@ from ckan.plugins import toolkit as tk
 from ckan.tests import factories
 from ckan.tests.helpers import call_action
 
+from ckanext.dimred import views as dimred_views
+from ckanext.dimred.exception import DimredError
 from ckanext.dimred.plugin import DimredPlugin
 
 
@@ -27,6 +29,58 @@ def test_plugin_exports_only_public_actions():
     assert "dimred_export_embedding" in actions
     assert "dimred_run_dimred_pipeline" not in actions
     assert "dimred_get_dimred_preview" not in actions
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_export_embedding_view_returns_action_csv(app, monkeypatch):
+    def export(context, data_dict):
+        assert context == {}
+        assert data_dict == {"id": "resource-1", "view_id": "view-1"}
+        return {
+            "filename": "dimred-resource-1-view-1.csv",
+            "content": "x,y\n1,2\n",
+            "content_type": "text/csv; charset=utf-8",
+        }
+
+    def get_export_action(name):
+        assert name == "dimred_export_embedding"
+        return export
+
+    monkeypatch.setattr(dimred_views.tk, "get_action", get_export_action)
+
+    response = app.get(url_for("dimred.export_embedding", resource_id="resource-1", view_id="view-1"))
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "text/csv; charset=utf-8"
+    assert response.headers["Content-Disposition"] == 'attachment; filename="dimred-resource-1-view-1.csv"'
+    assert response.body == "x,y\n1,2\n"
+
+
+@pytest.mark.usefixtures("with_plugins")
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (tk.NotAuthorized(), 403),
+        (tk.ValidationError({"preview": ["Preview is not ready."]}), 400),
+        (DimredError("Preview is unavailable."), 400),
+    ],
+)
+def test_export_embedding_view_maps_action_errors(app, monkeypatch, error, status):
+    def export(context, data_dict):
+        raise error
+
+    def get_export_action(name):
+        assert name == "dimred_export_embedding"
+        return export
+
+    monkeypatch.setattr(dimred_views.tk, "get_action", get_export_action)
+
+    response = app.get(
+        url_for("dimred.export_embedding", resource_id="resource-1", view_id="view-1"),
+        status=status,
+    )
+
+    assert response.status_code == status
 
 
 @pytest.mark.usefixtures("with_plugins")

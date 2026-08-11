@@ -124,12 +124,19 @@ Rendered 2D embedding PNG:
 
 ## Requirements
 
-Compatibility with core CKAN versions:
+The CI runtime matrix covers the CKAN minor lines supported by this extension using their
+official Python 3.10 development images:
 
-| CKAN version    | Compatible?   |
-| --------------- | ------------- |
-| 2.9 and earlier | no            |
-| 2.10+           | yes           |
+| CKAN version | Python runtime tested in CI | Support status |
+| --- | --- | --- |
+| 2.10.x | 3.10 | supported |
+| 2.11.x | 3.10 | supported |
+| 2.9 and earlier | — | not supported |
+| 2.12+ | — | not tested yet |
+
+CKAN 2.10 itself supports Python through 3.11 and CKAN 2.11 through 3.12. The
+extension metadata therefore advertises Python 3.10–3.12, but its complete
+service-backed CI suite currently verifies Python 3.10 only.
 
 ## Installation
 

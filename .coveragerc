@@ -1,5 +1,8 @@
 [report]
+precision = 1
+show_missing = True
 omit =
     */site-packages/*
     */python?.?/*
     ckan/*
+    */ckanext/dimred/tests/*

@@ -27,7 +27,11 @@ jobs:
   test:
     strategy:
       matrix:
-        ckan-version: ["2.11", "2.10"]
+        include:
+        - ckan-version: "2.11"
+          coverage: true
+        - ckan-version: "2.10"
+          coverage: false
       fail-fast: false
 
     runs-on: ubuntu-latest
@@ -65,7 +69,13 @@ jobs:
         sed -i -e 's/use = config:.*/use = config:\/srv\/app\/src\/ckan\/test-core.ini/' test_config/test.ini
         ckan -c test_config/test.ini db init
     - name: Run tests
-      run: pytest --ckan-ini=test_config/test.ini --cov=ckanext.dimred --disable-warnings ckanext/dimred
+      run: |
+        if [ "${{ matrix.coverage }}" = "true" ]; then
+          pytest --ckan-ini=test_config/test.ini --cov=ckanext.dimred --cov-report=term-missing \
+            --cov-fail-under=82 --disable-warnings ckanext/dimred
+        else
+          pytest --ckan-ini=test_config/test.ini --disable-warnings ckanext/dimred
+        fi
     - name: Build and verify release wheel
       if: matrix.ckan-version == '2.11'
       run: |
