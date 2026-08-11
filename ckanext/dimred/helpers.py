@@ -60,15 +60,34 @@ def dimred_feature_options_from_resource(
     resource: dict[str, Any], resource_view: dict[str, Any] | None = None
 ) -> list[dict[str, str]]:
     """Return feature selection options derived from the active data source."""
-    return [{"value": col, "text": col} for col in _resource_columns(resource, resource_view)]
+    return [
+        option
+        for group in dimred_feature_option_groups_from_resource(resource, resource_view)
+        for option in group["options"]
+    ]
+
+
+def dimred_feature_option_groups_from_resource(
+    resource: dict[str, Any], resource_view: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """Return feature options grouped by DataStore schema type when available."""
+    try:
+        if resource.get("datastore_active"):
+            return _datastore_feature_option_groups(_datastore_fields(resource))
+
+        columns = _resource_columns(resource, resource_view)
+        if not columns:
+            return []
+        return [{"label": tk._("Columns"), "options": [{"value": col, "text": col} for col in columns]}]
+    except (DimredError, KeyError, tk.NotAuthorized, tk.ObjectNotFound, tk.ValidationError):
+        return []
 
 
 def _resource_columns(resource: dict[str, Any], resource_view: dict[str, Any] | None) -> list[str]:
     """Return selectable columns from DataStore or the resource adapter."""
     try:
         if resource.get("datastore_active"):
-            info = tk.get_action("datastore_info")({}, {"id": resource["id"]})
-            return [field["id"] for field in info.get("fields", []) if field.get("id") != "_id"]
+            return [field["id"] for field in _datastore_fields(resource) if field.get("id") != "_id"]
 
         adapter_cls = dimred_utils.get_adapter_for_resource(resource)
         if not adapter_cls:
@@ -77,6 +96,56 @@ def _resource_columns(resource: dict[str, Any], resource_view: dict[str, Any] | 
         return adapter.get_columns()
     except (DimredError, KeyError, tk.NotAuthorized, tk.ObjectNotFound, tk.ValidationError):
         return []
+
+
+def _datastore_fields(resource: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return DataStore fields through CKAN's authorized action."""
+    info = tk.get_action("datastore_info")({}, {"id": resource["id"]})
+    return [field for field in info.get("fields", []) if field.get("id") != "_id"]
+
+
+def _datastore_feature_option_groups(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group DataStore fields without inferring pipeline feature eligibility."""
+    numeric_options: list[dict[str, str]] = []
+    other_options: list[dict[str, str]] = []
+
+    for field in fields:
+        field_id = field.get("id")
+        if not field_id:
+            continue
+        option = {"value": field_id, "text": field_id}
+        if _is_numeric_datastore_type(field.get("type")):
+            numeric_options.append(option)
+        else:
+            other_options.append(option)
+
+    groups: list[dict[str, Any]] = []
+    if numeric_options:
+        groups.append({"label": tk._("Numeric columns"), "options": numeric_options})
+    if other_options:
+        groups.append({"label": tk._("Other columns"), "options": other_options})
+    return groups
+
+
+def _is_numeric_datastore_type(value: Any) -> bool:
+    """Recognize numeric DataStore schema types without examining row values."""
+    type_name = str(value or "").lower()
+    return type_name in {
+        "bigint",
+        "decimal",
+        "double precision",
+        "float",
+        "float4",
+        "float8",
+        "int",
+        "int2",
+        "int4",
+        "int8",
+        "integer",
+        "numeric",
+        "real",
+        "smallint",
+    }
 
 
 def dimred_export_enabled() -> bool:

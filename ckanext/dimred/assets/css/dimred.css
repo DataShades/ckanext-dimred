@@ -1,9 +1,11 @@
-.dimred-feature-label::after {
-    content: "" !important;
+.dimred-feature-columns__actions {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
 }
 
-#feature-columns-list .checkbox {
-    margin: 4px 0;
+.dimred-feature-columns > select {
+    min-height: 10rem;
 }
 
 .dimred-container {

@@ -51,10 +51,11 @@ can color points by a chosen column and control which columns are used as featur
 Every selected feature and `Color by column` must still exist in the resource; a renamed
 or removed column returns a field-specific validation error. A color column is metadata by
 default and is excluded from the embedding features. To use it as an embedding feature too,
-select its checkbox explicitly after choosing it as `Color by`. Categorical feature columns
-must be enabled and stay within the configured category limit; otherwise the preview returns
-a `feature_columns` validation error. Leave all feature checkboxes unselected to use the
-eligible columns automatically.
+select it explicitly in the searchable Feature columns multi-select after choosing it as
+`Color by`. `Select all` deliberately excludes the current color column, while `Clear /
+automatic` removes the explicit selection and uses eligible columns automatically. Categorical
+feature columns must be enabled and stay within the configured category limit; otherwise the
+preview returns a `feature_columns` validation error.
 
 ### Reading a preview
 

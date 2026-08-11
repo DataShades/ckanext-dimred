@@ -56,6 +56,27 @@ def test_feature_options_use_columns(monkeypatch):
     assert adapter.columns_called is True
     assert adapter.dataframe_called is False
     assert [o["value"] for o in opts] == ["c1", "c2"]
+    assert helpers.dimred_feature_option_groups_from_resource({"id": "1", "format": "csv"}) == [
+        {
+            "label": "Columns",
+            "options": [
+                {"value": "c1", "text": "c1"},
+                {"value": "c2", "text": "c2"},
+            ],
+        }
+    ]
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_feature_option_groups_hide_empty_adapter_options(monkeypatch):
+    adapter = DummyAdapter({"id": "1"}, {})
+    monkeypatch.setattr(adapter, "get_columns", list)
+    monkeypatch.setattr(
+        "ckanext.dimred.helpers.dimred_utils.get_adapter_for_resource",
+        lambda resource: lambda *args, **kwargs: adapter,
+    )
+
+    assert helpers.dimred_feature_option_groups_from_resource({"id": "1", "format": "csv"}) == []
 
 
 @pytest.mark.usefixtures("with_plugins")
@@ -108,6 +129,19 @@ def test_resource_options_use_datastore_columns(app, package):
         "store_x",
         "store_y",
         "label",
+    ]
+    assert helpers.dimred_feature_option_groups_from_resource(resource) == [
+        {
+            "label": "Numeric columns",
+            "options": [
+                {"value": "store_x", "text": "store_x"},
+                {"value": "store_y", "text": "store_y"},
+            ],
+        },
+        {
+            "label": "Other columns",
+            "options": [{"value": "label", "text": "label"}],
+        },
     ]
 
 

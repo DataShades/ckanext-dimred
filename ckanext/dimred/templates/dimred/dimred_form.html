@@ -8,7 +8,7 @@
 {% endif %}
 {% set color_value = data.get('color_by', resource_view.color_by) if resource_view else data.get('color_by') %}
 {% set color_options = h.dimred_color_options_from_resource(resource, resource_view) %}
-{% set feature_options = h.dimred_feature_options_from_resource(resource, resource_view) %}
+{% set feature_option_groups = h.dimred_feature_option_groups_from_resource(resource, resource_view) %}
 {% set method_for_defaults = method_value or h.dimred_default_method() %}
 {% set default_params_full = h.dimred_method_default_params(method_for_defaults) %}
 {% set raw_params_value = data.get('method_params', resource_view.method_params) if resource_view else data.get('method_params') %}
@@ -49,26 +49,34 @@
     ) }}
 </div>
 
-{% if feature_options %}
+{% if feature_option_groups %}
     <div class="form-group control-group">
-        <label class="form-label">{{ _('Feature columns') }}</label>
-        <div class="controls" id="feature-columns-list">
+        <label class="form-label" for="field-feature-columns">{{ _('Feature columns') }}</label>
+        <div class="controls dimred-feature-columns">
             <span class="info-block">{{ _('Leave all columns unselected to use eligible columns automatically.') }}</span>
-            {% for opt in feature_options %}
-                <div class="checkbox">
-                    <label class="dimred-feature-label"
-                           for="field-feature-{{ loop.index }}">
-                        <input
-                                id="field-feature-{{ loop.index }}"
-                                type="checkbox"
-                                name="feature_columns"
-                                value="{{ opt.value }}"
-                                {% if opt.value in selected_features %}checked{% endif %}
-                        />
-                        {{ opt.text }}
-                    </label>
-                </div>
-            {% endfor %}
+            <div class="dimred-feature-columns__actions">
+                <button class="btn btn-default" id="dimred-select-all-features" type="button">
+                    {{ _('Select all') }}
+                </button>
+                <button class="btn btn-default" id="dimred-clear-features" type="button">
+                    {{ _('Clear / automatic') }}
+                </button>
+            </div>
+            <select
+                    class="form-control"
+                    data-module="autocomplete"
+                    id="field-feature-columns"
+                    multiple="multiple"
+                    name="feature_columns"
+            >
+                {% for group in feature_option_groups %}
+                    <optgroup label="{{ group.label }}">
+                        {% for opt in group.options %}
+                            <option value="{{ opt.value }}"{% if opt.value in selected_features %} selected{% endif %}>{{ opt.text }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
         </div>
     </div>
 {% endif %}

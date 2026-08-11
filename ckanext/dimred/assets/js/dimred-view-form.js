@@ -11,6 +11,9 @@ ckan.module("dimred-view-form", function ($) {
             this.componentsField = $("#field-n-components");
             this.paramsField = $("#field-method-params");
             this.colorSelect = $("#field-color_by");
+            this.featureColumnsSelect = $("#field-feature-columns");
+            this.selectAllFeaturesButton = $("#dimred-select-all-features");
+            this.clearFeaturesButton = $("#dimred-clear-features");
             this.resetButton = $("#dimred-reset-method-params");
             this.paramFields = this.container.find("[data-dimred-param]");
             this.defaults = this._parseDefaults(this.options.defaults || this.container.attr("data-module-defaults"));
@@ -21,6 +24,8 @@ ckan.module("dimred-view-form", function ($) {
 
             this.methodSelect.on("change", this._onMethodChange.bind(this));
             this.colorSelect.on("change", this._excludeColorFromFeatures.bind(this));
+            this.selectAllFeaturesButton.on("click", this._selectAllFeatures.bind(this));
+            this.clearFeaturesButton.on("click", this._clearFeatures.bind(this));
             this.paramFields.on("change input", this._syncParams.bind(this));
             this.resetButton.on("click", this._resetCurrentMethod.bind(this));
             this.container.closest("form").on("submit", this._syncParams.bind(this));
@@ -102,14 +107,39 @@ ckan.module("dimred-view-form", function ($) {
         },
 
         _excludeColorFromFeatures: function () {
+            if (!this.featureColumnsSelect.length) {
+                return;
+            }
+
             var colorBy = this.colorSelect.val();
             if (!colorBy) {
                 return;
             }
 
-            $("#feature-columns-list input").filter(function () {
-                return $(this).val() === colorBy;
-            }).prop("checked", false);
+            var selected = this.featureColumnsSelect.val() || [];
+            this.featureColumnsSelect.val(selected.filter(function (column) {
+                return column !== colorBy;
+            })).trigger("change");
+        },
+
+        _selectAllFeatures: function () {
+            if (!this.featureColumnsSelect.length) {
+                return;
+            }
+
+            var colorBy = this.colorSelect.val();
+            var values = this.featureColumnsSelect.find("option").map(function () {
+                return $(this).val();
+            }).get().filter(function (column) {
+                return column !== colorBy;
+            });
+            this.featureColumnsSelect.val(values).trigger("change");
+        },
+
+        _clearFeatures: function () {
+            if (this.featureColumnsSelect.length) {
+                this.featureColumnsSelect.val([]).trigger("change");
+            }
         },
     };
 });

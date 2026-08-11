@@ -1,4 +1,7 @@
+from io import BytesIO
+
 import pytest
+from werkzeug.datastructures import FileStorage
 
 from ckan.lib.helpers import url_for
 from ckan.plugins import plugin_loaded
@@ -58,6 +61,42 @@ def test_form_renders_method_parameter_controls(app):
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_form_renders_autocomplete_feature_multi_select(app):
+    user = factories.UserWithToken()
+    organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
+    package = factories.Dataset(owner_org=organization["id"])
+    resource = call_action(
+        "resource_create",
+        package_id=package["id"],
+        name="Columns",
+        format="csv",
+        upload=FileStorage(
+            stream=BytesIO(b"x,y,label\n1,2,first\n"),
+            filename="columns.csv",
+            content_type="text/csv",
+        ),
+    )
+    url = url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+        view_type="dimred_view",
+    )
+
+    response = app.get(url, headers={"Authorization": user["token"]})
+
+    assert 'id="field-feature-columns"' in response
+    assert 'name="feature_columns"' in response
+    assert 'multiple="multiple"' in response
+    assert 'data-module="autocomplete"' in response
+    assert 'id="dimred-select-all-features"' in response
+    assert 'id="dimred-clear-features"' in response
+    assert '<option value="x">x</option>' in response
+    assert '<option value="y">y</option>' in response
+    assert '<option value="label">label</option>' in response
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
 def test_form_submission_persists_method_params_and_restores_controls(app):
     user = factories.UserWithToken()
     organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
@@ -96,6 +135,56 @@ def test_form_submission_persists_method_params_and_restores_controls(app):
     assert view["method_params"] == {"random_state": 42, "perplexity": 12.5}
     assert 'id="field-method-param-perplexity"' in response
     assert 'value="12.5"' in response
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_form_submission_persists_native_feature_multi_select(app):
+    user = factories.UserWithToken()
+    organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
+    package = factories.Dataset(owner_org=organization["id"])
+    resource = call_action(
+        "resource_create",
+        package_id=package["id"],
+        name="Columns",
+        format="csv",
+        upload=FileStorage(
+            stream=BytesIO(b"x,y,label\n1,2,first\n"),
+            filename="columns.csv",
+            content_type="text/csv",
+        ),
+    )
+    new_view_url = url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+    )
+
+    app.post(
+        new_view_url,
+        headers={"Authorization": user["token"]},
+        query_string={"view_type": "dimred_view"},
+        status=200,
+        data={
+            "title": "Dimred",
+            "view_type": "dimred_view",
+            "method": "pca",
+            "feature_columns": ["x", "y"],
+            "color_by": "label",
+        },
+    )
+    view = call_action("resource_view_list", id=resource["id"])[0]
+    edit_view_url = url_for(
+        "dataset_resource.edit_view",
+        id=package["name"],
+        resource_id=resource["id"],
+        view_id=view["id"],
+    )
+    response = app.get(edit_view_url, headers={"Authorization": user["token"]})
+
+    assert view["feature_columns"] == ["x", "y"]
+    assert '<option value="x" selected>x</option>' in response
+    assert '<option value="y" selected>y</option>' in response
+    assert '<option value="label">label</option>' in response
 
 
 @pytest.mark.usefixtures("with_plugins")

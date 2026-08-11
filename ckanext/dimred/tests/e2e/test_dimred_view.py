@@ -193,7 +193,17 @@ def test_method_parameter_controls_switch_reset_and_serialize(app, page, base_ur
     user = factories.UserWithToken()
     organization = factories.Organization(users=[{"name": user["name"], "capacity": "admin"}])
     package = factories.Dataset(owner_org=organization["id"])
-    resource = factories.Resource(package_id=package["id"], format="csv")
+    resource = call_action(
+        "resource_create",
+        package_id=package["id"],
+        name="Columns",
+        format="csv",
+        upload=FileStorage(
+            stream=BytesIO(b"x,y,score,label\n1,2,3,first\n"),
+            filename="columns.csv",
+            content_type="text/csv",
+        ),
+    )
     form_url = tk.url_for(
         "dataset_resource.edit_view",
         id=package["name"],
@@ -210,6 +220,7 @@ def test_method_parameter_controls_switch_reset_and_serialize(app, page, base_ur
     page.add_script_tag(content=FORM_MODULE_SOURCE)
     page.evaluate(
         """() => {
+            window.ckan.module.initializeElement(document.getElementById("field-feature-columns"));
             window.ckan.module.initializeElement(document.getElementById("dimred-method-params"));
         }"""
     )
@@ -224,3 +235,21 @@ def test_method_parameter_controls_switch_reset_and_serialize(app, page, base_ur
 
     page.locator("#dimred-reset-method-params").click()
     expect(page.locator("#field-method-param-perplexity")).to_have_value("30")
+
+    feature_search = page.locator("#s2id_field-feature-columns .select2-input")
+    feature_search.fill("score")
+    page.locator(".select2-result-label").filter(has_text="score").click()
+    assert page.locator("#field-feature-columns").evaluate(
+        "select => Array.from(select.selectedOptions, option => option.value)"
+    ) == ["score"]
+
+    page.locator("#field-color_by").select_option("label")
+    page.locator("#dimred-select-all-features").click()
+    assert page.locator("#field-feature-columns").evaluate(
+        "select => Array.from(select.selectedOptions, option => option.value)"
+    ) == ["x", "y", "score"]
+
+    page.locator("#dimred-clear-features").click()
+    assert page.locator("#field-feature-columns").evaluate(
+        "select => Array.from(select.selectedOptions, option => option.value)"
+    ) == []
