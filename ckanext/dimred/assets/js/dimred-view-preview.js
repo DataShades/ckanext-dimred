@@ -5,6 +5,7 @@ this.ckan.module("dimred-view-preview", function ($) {
 
     return {
         initialize: function () {
+            var module = this;
             var container = $("#dimred-preview-status");
             var statusUrl = container.attr("data-status-url");
             var resourceId = container.attr("data-resource-id");
@@ -20,13 +21,13 @@ this.ckan.module("dimred-view-preview", function ($) {
                 container
                     .removeClass("alert-info")
                     .addClass("alert-danger")
-                    .text(message || "Dimred preview failed.");
+                    .text(message || module._("Dimred preview failed."));
             };
 
             var poll = function () {
                 attempts += 1;
                 if (attempts > maxAttempts) {
-                    showError("Dimred preview is taking longer than expected. Reload the page to check its status.");
+                    showError(module._("Dimred preview is taking longer than expected. Reload the page to check its status."));
                     return;
                 }
 
@@ -42,7 +43,7 @@ this.ckan.module("dimred-view-preview", function ($) {
                     .done(function (response) {
                         var result = response && response.success ? response.result : null;
                         if (!result) {
-                            showError("Unable to check dimred preview status.");
+                            showError(module._("Unable to check dimred preview status."));
                             return;
                         }
                         if (result.status === "ready") {
@@ -50,16 +51,16 @@ this.ckan.module("dimred-view-preview", function ($) {
                             return;
                         }
                         if (result.status === "failed") {
-                            showError(result.error || "Dimred preview failed.");
+                            showError(result.error || module._("Dimred preview failed."));
                             return;
                         }
                         if (result.status === "running") {
-                            container.text("Generating dimensionality reduction preview…");
+                            container.text(module._("Generating dimensionality reduction preview…"));
                         }
                         window.setTimeout(poll, pollInterval);
                     })
                     .fail(function () {
-                        showError("Unable to check dimred preview status.");
+                        showError(module._("Unable to check dimred preview status."));
                     });
             };
 

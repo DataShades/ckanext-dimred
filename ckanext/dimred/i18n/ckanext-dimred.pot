@@ -1,0 +1,424 @@
+# Translations template for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-08-11 19:11+0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.15.0\n"
+
+#: ckanext/dimred/helpers.py:97 ckanext/dimred/helpers.py:109
+msgid "Not selected"
+msgstr ""
+
+#: ckanext/dimred/helpers.py:136
+msgid "Columns"
+msgstr ""
+
+#: ckanext/dimred/helpers.py:179
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:80
+msgid "Numeric columns"
+msgstr ""
+
+#: ckanext/dimred/helpers.py:181
+msgid "Other columns"
+msgstr ""
+
+#: ckanext/dimred/helpers.py:285
+msgid "ECharts (interactive)"
+msgstr ""
+
+#: ckanext/dimred/helpers.py:286
+msgid "Matplotlib (static)"
+msgstr ""
+
+#: ckanext/dimred/plugin.py:52 ckanext/dimred/plugin.py:53
+#: ckanext/dimred/templates/dimred/dimred_preview.html:23
+msgid "Dimensionality reduction"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-preview.js:24
+#: ckanext/dimred/assets/js/dimred-view-preview.js:54 ckanext/dimred/plugin.py:123
+msgid "Dimred preview failed."
+msgstr ""
+
+#: ckanext/dimred/plugin.py:174
+msgid "Invalid dimensionality reduction settings."
+msgstr ""
+
+#: ckanext/dimred/views.py:17
+msgid "Not authorized"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:31
+msgid "Failed to render embedding (parse error)."
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:36
+msgid "No embedding data available."
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:67
+#: ckanext/dimred/templates/dimred/dimred_preview.html:68
+msgid "Legend"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:68
+#: ckanext/dimred/templates/dimred/dimred_preview.html:69
+#: ckanext/dimred/utils/core.py:144
+msgid "Missing"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:106
+#, python-format
+msgid "Source row: %(row)s"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:407
+msgid "Loading color values…"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:459
+msgid "Unable to load color values. Reload the preview."
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:469
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:43
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:58
+msgid "Color by"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:472
+msgid "None"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-echarts.js:542
+msgid "Failed to render embedding (chart error)."
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-form.js:22
+#: ckanext/dimred/templates/dimred/dimred_form.html:77
+#: ckanext/dimred/templates/dimred/dimred_form.html:86
+msgid "automatic"
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-preview.js:30
+msgid ""
+"Dimred preview is taking longer than expected. Reload the page to check its "
+"status."
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-preview.js:46
+#: ckanext/dimred/assets/js/dimred-view-preview.js:63
+msgid "Unable to check dimred preview status."
+msgstr ""
+
+#: ckanext/dimred/assets/js/dimred-view-preview.js:58
+msgid "Generating dimensionality reduction preview…"
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:30
+msgid "Method '{method}' is not allowed."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:56
+msgid "feature_columns must be a list or comma-separated string."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:81
+msgid "display_fields must be a list or comma-separated string."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:98
+msgid "Invalid JSON in method_params."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:101 ckanext/dimred/logic/validators.py:103
+msgid "method_params must be a JSON object."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:117
+msgid "Render backend '{backend}' is not supported."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:128 ckanext/dimred/logic/validators.py:133
+msgid "n_components must be an integer (2 or 3)."
+msgstr ""
+
+#: ckanext/dimred/logic/validators.py:136
+msgid "n_components must be 2 or 3."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:40
+msgid "Tooltip fields"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:42
+msgid "Selected values are shown in the interactive tooltip and CSV export."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:79
+msgid "Preview workload"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:81
+msgid "Configured maximum:"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:83
+msgid "rows processed for"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:85
+msgid "Feature columns:"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:89
+msgid "Reference benchmark:"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:93
+msgid "features on the documented benchmark host:"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:98
+msgid "Benchmark parameters:"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:100
+msgid ""
+"This is a reference measurement, not a runtime prediction for this dataset or"
+" deployment."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:109
+msgid "Dimensionality reduction method"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:120
+msgid "Number of components"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:130
+msgid "Feature columns"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:132
+msgid "Leave all columns unselected to use eligible columns automatically."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:135
+msgid "Select all"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:138
+msgid "Clear / automatic"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:164
+msgid "Color by column"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:187
+msgid "Random seed"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:199
+msgid "Whiten components"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:210
+msgid "Perplexity"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:222
+msgid "Number of neighbors"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:231
+msgid "Minimum distance"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:242
+msgid "Reset method defaults"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_form.html:262
+msgid "Render backend"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_preview.html:43
+msgid "Preparing dimensionality reduction preview…"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_preview.html:49
+msgid "Dimensionality reduction plot"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_preview.html:74
+msgid "No embedding image available."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/dimred_preview.html:87
+msgid "Download embedding (CSV)"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:5
+msgid "Summary"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:10
+msgid "Method"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:13
+msgid "components"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:18
+msgid "Rows used"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:20
+msgid "original"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:22
+msgid "points in embedding"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:28
+msgid "Sampling"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:30
+msgid "Deterministic reservoir sample"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:32
+msgid "Bounded DataStore read"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:34
+msgid "All rows"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:36
+msgid "limit"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:37
+msgid "rows not included"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:46
+msgid "Classes"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:49
+msgid "Top"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:64
+msgid "Ranges"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:73
+msgid "Features"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:75
+msgid "numeric"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:75
+msgid "categorical"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:83
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:92
+msgid "more"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:88
+msgid "Categorical columns"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:97
+msgid "used for color only"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:98
+msgid "no finite values"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:99
+msgid "mixed numeric and text values"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:100
+msgid "datetime values"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:101
+msgid "categorical features disabled"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:102
+msgid "fewer than two distinct values"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:103
+msgid "too many categories"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:106
+msgid "Skipped columns"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:116
+msgid "PCA explained variance"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:118
+msgid "component"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:121
+msgid "cumulative"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:131
+msgid "Interpretation notes"
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:136
+msgid ""
+"Distances and visible clusters in UMAP or t-SNE are exploratory and do not by"
+" themselves prove cluster structure."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:138
+msgid "This preview uses sampled rows and does not represent every source record."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:140
+msgid "Numeric features are standardized before dimensionality reduction."
+msgstr ""
+
+#: ckanext/dimred/templates/dimred/snippets/dimred_summary.html:142
+msgid ""
+"Eligible categorical features are one-hot encoded before dimensionality "
+"reduction."
+msgstr ""
+

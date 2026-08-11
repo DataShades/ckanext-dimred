@@ -1,8 +1,10 @@
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from werkzeug.datastructures import FileStorage
 
+from ckan import plugins as p
 from ckan.lib.helpers import url_for
 from ckan.plugins import plugin_loaded
 from ckan.plugins import toolkit as tk
@@ -17,6 +19,16 @@ from ckanext.dimred.plugin import DimredPlugin
 @pytest.mark.usefixtures("with_plugins")
 def test_plugin():
     assert plugin_loaded("dimred")
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_plugin_registers_extension_translation_catalog():
+    plugin = next(
+        plugin for plugin in p.PluginImplementations(p.ITranslation) if isinstance(plugin, DimredPlugin)
+    )
+
+    assert plugin.i18n_domain() == "ckanext-dimred"
+    assert Path(plugin.i18n_directory(), "ckanext-dimred.pot").is_file()
 
 
 @pytest.mark.usefixtures("with_plugins")

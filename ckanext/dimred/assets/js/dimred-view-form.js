@@ -19,7 +19,7 @@ ckan.module("dimred-view-form", function ($) {
             this.paramFields = this.container.find("[data-dimred-param]");
             this.defaults = this._parseDefaults(this.options.defaults || this.container.attr("data-module-defaults"));
             this.workloadProfiles = this._parseDefaults(this.workloadPreflight.attr("data-module-workload-profiles"));
-            this.automaticFeaturesLabel = this.workloadPreflight.attr("data-module-automatic-features") || "automatic";
+            this.automaticFeaturesLabel = this.workloadPreflight.attr("data-module-automatic-features") || this._("automatic");
 
             if (!this.methodSelect.length || !this.paramsField.length) {
                 return;

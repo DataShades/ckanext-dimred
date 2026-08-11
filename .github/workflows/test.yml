@@ -96,6 +96,7 @@ jobs:
         required = {
             "ckanext/dimred/config_declaration.yaml",
             "ckanext/dimred/assets/webassets.yml",
+            "ckanext/dimred/i18n/ckanext-dimred.pot",
             "ckanext/dimred/templates/dimred/dimred_preview.html",
         }
         assert required <= names, required - names

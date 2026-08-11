@@ -2,6 +2,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
     "use strict";
     return {
         initialize: function () {
+            var module = this;
             var container = $("#dimred-js-render");
             var selectContainer = $("#dimred-color-select");
             var legendContainer = $("#dimred-color-legend");
@@ -27,12 +28,12 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 meta = rawMeta ? JSON.parse(rawMeta) : {};
             } catch (e) {
                 console.error("dimred-view-echarts: failed to parse embedding/meta", e);
-                container.text("Failed to render embedding (parse error).");
+                container.text(module._("Failed to render embedding (parse error)."));
                 return;
             }
 
             if (!embedding || !embedding.length) {
-                container.text("No embedding data available.");
+                container.text(module._("No embedding data available."));
                 return;
             }
 
@@ -63,8 +64,8 @@ this.ckan.module("dimred-view-echarts", function ($) {
             ];
             var baseColor = palette[0];
             var missingColor = "#999999";
-            var legendTitle = legendContainer.attr("data-title") || "Legend";
-            var missingLabel = legendContainer.attr("data-missing-label") || "Missing";
+            var legendTitle = legendContainer.attr("data-title") || module._("Legend");
+            var missingLabel = legendContainer.attr("data-missing-label") || module._("Missing");
 
             var firstPoint = embedding[0] || [];
             var is3D = Array.isArray(firstPoint) && firstPoint.length >= 3;
@@ -102,7 +103,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 }
                 var sourceRowId = params.data ? params.data.__sourceRowId : null;
                 if (sourceRowId !== undefined && sourceRowId !== null) {
-                    lines.push("Source row: " + sourceRowId);
+                    lines.push(module._("Source row: %(row)s", { row: sourceRowId }));
                 }
                 var displayValues = (params.data && params.data.__displayValues) || {};
                 $.each(displayFields, function (_, field) {
@@ -403,7 +404,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                         return $.Deferred().reject().promise();
                     }
 
-                    setColorLoadStatus("Loading color values…", false);
+                    setColorLoadStatus(module._("Loading color values…"), false);
                     var request = $.ajax({
                         url: colorValuesUrl,
                         dataType: "json",
@@ -455,7 +456,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                                 return;
                             }
                             applyUniformColor();
-                            setColorLoadStatus("Unable to load color values. Reload the preview.", true);
+                            setColorLoadStatus(module._("Unable to load color values. Reload the preview."), true);
                         });
                 };
 
@@ -465,10 +466,10 @@ this.ckan.module("dimred-view-echarts", function ($) {
                     }
 
                     var selectId = "dimred-color-select-input";
-                    var label = $('<label class="dimred-color-select__label" for="' + selectId + '">Color by</label>');
+                    var label = $('<label class="dimred-color-select__label" for="' + selectId + '"></label>').text(module._("Color by"));
                     var select = $('<select class="form-control dimred-color-select__control" id="' + selectId + '"></select>');
                     colorLoadStatus = $('<span class="dimred-color-select__status" aria-live="polite"></span>');
-                    select.append('<option value="">None</option>');
+                    select.append($("<option></option>").attr("value", "").text(module._("None")));
 
                     $.each(colorCandidates, function (_, cand) {
                         if (!cand || !cand.name) {
@@ -538,7 +539,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 });
             } catch (err) {
                 console.error("dimred-view-echarts: failed to render chart", err);
-                container.text("Failed to render embedding (chart error).");
+                container.text(module._("Failed to render embedding (chart error)."));
             }
         },
     };

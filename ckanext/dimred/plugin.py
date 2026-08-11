@@ -8,6 +8,7 @@ import ckan.plugins as p
 import ckan.plugins.toolkit as tk
 from ckan import types
 from ckan.common import CKANConfig
+from ckan.lib.plugins import DefaultTranslation
 
 from ckanext.dimred import config as dimred_config
 from ckanext.dimred import utils as dimred_utils
@@ -21,10 +22,11 @@ from ckanext.dimred.logic import schema
 @tk.blanket.helpers
 @tk.blanket.validators
 @tk.blanket.blueprints
-class DimredPlugin(p.SingletonPlugin):
+class DimredPlugin(p.SingletonPlugin, DefaultTranslation):
     p.implements(p.IConfigurable)
     p.implements(p.IConfigurer)
     p.implements(p.IResourceView, inherit=True)
+    p.implements(p.ITranslation)
 
     # IConfigurable
 

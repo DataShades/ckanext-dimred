@@ -8,8 +8,6 @@ view that:
 Create the view, select a method, and generate a 2D or 3D projection of your data. You
 can color points by a chosen column and control which columns are used as features.
 
-![UMAP embedding PNG](doc/example_umap_preview.png)
-
 ## How it works
 
 - Data loading: adapters handle CSV/TSV/XLS/XLSX; active DataStore resources
@@ -114,13 +112,19 @@ Iris dataset:
 | ...      | ...          | ...         | ...          | ...         | ...        |
 
 
-Creating the dimred view: Method, Feature selection, Color by:
+Creating a UMAP 3D view with method-specific controls, `n_components`, feature
+and tooltip selectors, the ECharts backend, and workload preflight:
 
-![Creating the dimred view](doc/example_form.png)
+![DimRed view form](doc/example_form.png)
 
-Rendered 2D embedding PNG:
+Interactive PCA 2D embedding with categorical legend, color selector, summary,
+and CSV export:
 
-![Rendered 2D embedding PNG](doc/example_tsne_preview.png)
+![Interactive PCA 2D embedding](doc/example_pca_preview.png)
+
+Interactive UMAP 3D embedding:
+
+![Interactive UMAP 3D embedding](doc/example_umap_3d_preview.png)
 
 ## Requirements
 

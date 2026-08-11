@@ -1,4 +1,4 @@
 include README.md
 include LICENSE
-recursive-include ckanext/dimred *.html *.js *.css *.yml *.yaml
+recursive-include ckanext/dimred *.html *.js *.css *.yml *.yaml *.pot *.po *.mo
 prune ckanext/dimred/tests
