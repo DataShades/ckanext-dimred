@@ -48,6 +48,10 @@ dev = [
     "pytest-playwright>=0.8",
     "ruff>=0.8",
 ]
+docs = [
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.6,<10",
+]
 
 [project.entry-points."ckan.plugins"]
 dimred = "ckanext.dimred.plugin:DimredPlugin"

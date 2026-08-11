@@ -16,13 +16,14 @@ jobs:
     - name: Install quality dependencies
       run: |
         pip install --upgrade pip
-        pip install -e '.[dev]'
+        pip install -e '.[dev,docs]'
         npm ci
     - name: Run static quality checks
       run: |
         ruff check ckanext/dimred
         python scripts/typecheck.py
         npm run lint:js
+        mkdocs build --strict
 
   test:
     strategy:

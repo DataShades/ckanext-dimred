@@ -2,302 +2,89 @@
 
 # ckanext-dimred
 
-Dimensionality-reduction preview for tabular resources. The extension adds a resource
-view that:
+CKAN resource view for bounded dimensionality-reduction previews of tabular
+data. It supports PCA, t-SNE, and UMAP; interactive ECharts and static
+Matplotlib rendering; configurable feature, colour, and tooltip fields; CSV
+export; Redis caching; and CKAN RQ background jobs.
 
-Create the view, select a method, and generate a 2D or 3D projection of your data. You
-can color points by a chosen column and control which columns are used as features.
+Read the documentation in this repository:
 
-## How it works
+- [Installation and compatibility](https://github.com/DataShades/ckanext-dimred/blob/master/docs/installation.md)
+- [Usage](https://github.com/DataShades/ckanext-dimred/blob/master/docs/usage.md)
+- [Configuration](https://github.com/DataShades/ckanext-dimred/blob/master/docs/configuration.md)
+- [Operations and troubleshooting](https://github.com/DataShades/ckanext-dimred/blob/master/docs/operations.md)
+- [Workload budgets](https://github.com/DataShades/ckanext-dimred/blob/master/docs/benchmarks/workload-budgets.md)
 
-- Data loading: adapters handle CSV/TSV/XLS/XLSX; active DataStore resources
-  are read through CKAN's DataStore API. Row sampling preserves a stable source
-  row ID (`_id` for DataStore, 1-based ordinal for files).
-- Feature prep: numeric columns included; low-cardinality categoricals one-hot encoded
-  if enabled; user can pick feature columns.
-- Dimensionality reduction: choose [UMAP](https://umap-learn.readthedocs.io/)
-  or [t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
-  or [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html),
-  with configurable defaults and per-view form controls.
-- Rendering: configurable backend — interactive [Apache ECharts](https://echarts.apache.org/)
-  with 3D scatter support (default) or static Matplotlib PNG (2D/3D); choose per view
-  in the form, with the config value as the default; pluggable to custom renderer if
-  you override bundle/module.
-- API: `dimred_start_preview` starts or reads a preview, while
-  `dimred_get_preview_status` returns its asynchronous status and result.
-- Caching: results are cached in Redis by default so repeat calls with
-  the same settings avoid recomputing the projection (configurable TTL
-  and on/off toggle).
+## Install
 
-## Usage
-
-1. Add a tabular resource (csv/tsv/xls/xlsx).
-2. Create a new resource view of type `dimred_view`.
-3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, select feature
-   columns, and choose contextual `Tooltip fields`.
-4. (Optional) Adjust the controls shown for the selected method. Leave a value empty
-   to use its configured default; use **Reset method defaults** to restore them.
-   `n_components` controls 2D/3D output.
-5. (Optional) Pick render backend (`ECharts` interactive or `Matplotlib` PNG) — defaults
-   to the config value.
-6. Save or Preview to see the rendered embedding (interactive or PNG, depending on
-   `ckanext.dimred.render_backend`), and use “Download embedding (CSV)” to get the
-   coordinates with their source row IDs.
-
-### Feature and color columns
-
-Every selected feature and `Color by column` must still exist in the resource; a renamed
-or removed column returns a field-specific validation error. A color column is metadata by
-default and is excluded from the embedding features. To use it as an embedding feature too,
-select it explicitly in the searchable Feature columns multi-select after choosing it as
-`Color by`. `Select all` deliberately excludes the current color column, while `Clear /
-automatic` removes the explicit selection and uses eligible columns automatically. Categorical
-feature columns must be enabled and stay within the configured category limit; otherwise the
-preview returns a `feature_columns` validation error.
-
-### Tooltip fields and CSV context
-
-`Tooltip fields` are contextual columns only: they do not become projection features and do not
-affect point colours. Their sampled values are shown in the interactive ECharts tooltip and included
-in the CSV export after `source_row_id` and the selected color column. A field already used for the
-current colour is included once, as the color column. Matplotlib is a static image, so its contextual
-row values remain available through the CSV export.
-
-### Reading a preview
-
-Categorical colouring has a bounded legend; numeric colouring uses a continuous
-scale with the selected column name. The summary states whether all rows were
-used, a deterministic reservoir sample was taken, or a DataStore read was
-bounded by the effective row limit. It also reports feature preprocessing and
-automatic column skips.
-
-PCA previews show explained variance for each displayed component and their
-cumulative value. UMAP and t-SNE are exploratory projections: visible distance
-or apparent clusters are not, by themselves, evidence of a cluster structure.
-The same caution applies when a preview is based on sampled rows.
-
-### Data quality
-
-Numeric columns with missing or infinite values are imputed before dimensionality reduction.
-Automatic selection skips empty, mixed numeric/text, and datetime columns, listing them in
-`prepare_info.skipped_columns`. Select such a column explicitly to receive a
-`feature_columns` validation error instead. Boolean columns follow the categorical-feature
-setting.
-
-API: call `dimred_start_preview` with `id` (resource id) and `view_id`, then
-poll `dimred_get_preview_status` with the returned `job_id` until it is ready.
-
-### 3D rendering
-
-- Set `n_components` to `3` in the form (or method parameters) to get a 3D embedding.
-- Interactive backend (`ckanext.dimred.render_backend = echarts`) uses ECharts with
-  `echarts-gl` so you can rotate/zoom/pan the point cloud.
-- Static backend (`render_backend = matplotlib`) renders a 3D scatter PNG (fixed view
-  angle, rotatable only when using the interactive backend).
-
-## Example
-
-Iris dataset:
-
-| rownames | Sepal.Length | Sepal.Width | Petal.Length | Petal.Width | Species    |
-|----------|--------------|-------------|--------------|-------------|------------|
-| 1        | 5.1          | 3.5         | 1.4          | 0.2         | setosa     |
-| 2        | 4.9          | 3.0         | 1.4          | 0.2         | setosa     |
-| ...      | ...          | ...         | ...          | ...         | ...        |
-| 51       | 7.0          | 3.2         | 4.7          | 1.4         | versicolor |
-| 52       | 6.4          | 3.2         | 4.5          | 1.5         | versicolor |
-| ...      | ...          | ...         | ...          | ...         | ...        |
-| 101      | 6.3          | 3.3         | 6.0          | 2.5         | virginica  |
-| 102      | 5.8          | 2.7         | 5.1          | 1.9         | virginica  |
-| ...      | ...          | ...         | ...          | ...         | ...        |
-
-
-Creating a UMAP 3D view with method-specific controls, `n_components`, feature
-and tooltip selectors, the ECharts backend, and workload preflight:
-
-![DimRed view form](doc/example_form.png)
-
-Interactive PCA 2D embedding with categorical legend, color selector, summary,
-and CSV export:
-
-![Interactive PCA 2D embedding](doc/example_pca_preview.png)
-
-Interactive UMAP 3D embedding:
-
-![Interactive UMAP 3D embedding](doc/example_umap_3d_preview.png)
-
-## Requirements
-
-The CI runtime matrix covers the CKAN minor lines supported by this extension using their
-official Python 3.10 development images:
-
-| CKAN version | Python runtime tested in CI | Support status |
-| --- | --- | --- |
-| 2.10.x | 3.10 | supported |
-| 2.11.x | 3.10 | supported |
-| 2.9 and earlier | — | not supported |
-| 2.12+ | — | not tested yet |
-
-CKAN 2.10 itself supports Python through 3.11 and CKAN 2.11 through 3.12. The
-extension metadata therefore advertises Python 3.10–3.12, but its complete
-service-backed CI suite currently verifies Python 3.10 only.
-
-## Installation
-
-To install ckanext-dimred:
-
-1. Activate your CKAN virtual environment, for example:
-
-   . /usr/lib/ckan/default/bin/activate
-
-2. Clone the source and install it on the virtualenv
-
-   git clone https://github.com/DataShades/ckanext-dimred.git
-   cd ckanext-dimred
-   pip install -e .
-
-3. Add `dimred` to the `ckan.plugins` setting in your CKAN
-   config file (by default the config file is located at
-   `/etc/ckan/default/ckan.ini`).
-
-4. Restart CKAN. For example if you've deployed CKAN with Apache on Ubuntu:
-
-   sudo service apache2 reload
-
-## Config settings
-
-General defaults:
-
-- `ckanext.dimred.default_method` (default: `umap`)
-- `ckanext.dimred.allowed_methods` (default: `umap tsne pca`)
-- `ckanext.dimred.max_file_size_mb` (default: `50`)
-- `ckanext.dimred.max_rows` (default: `50000`; global upper bound for every method)
-- `ckanext.dimred.max_preview_payload_mb` (default: `8`; maximum compact JSON preview result before cache/RQ storage and browser rendering)
-- `ckanext.dimred.max_color_candidates` (default: `100`; maximum color-column descriptors; the selected `color_by` is always retained)
-- `ckanext.dimred.enable_categorical` (default: `true`)
-- `ckanext.dimred.max_categories_for_ohe` (default: `30`)
-- `ckanext.dimred.export_enabled` (default: `true`)
-- `ckanext.dimred.cache_enabled` (default: `true`)
-- `ckanext.dimred.cache_ttl` (default: `3600`)
-- `ckanext.dimred.render_backend` (default: `echarts`; `echarts` for interactive chart, `matplotlib` for static PNG)
-- `ckanext.dimred.render_asset` (optional; override the webassets bundle for the configured render backend)
-- `ckanext.dimred.render_module` (optional; override the CKAN JS module for the configured render backend)
-- `ckanext.dimred.embedding_decimals` (default: `3`; decimal places to round embedding coordinates before returning/exporting)
-
-UMAP defaults:
-
-- `ckanext.dimred.umap.n_neighbors` (default: `15`)
-- `ckanext.dimred.umap.min_dist` (default: `0.1`)
-- `ckanext.dimred.umap.n_components` (default: `2`)
-- `ckanext.dimred.umap.max_rows` (default: `10000`)
-
-t-SNE defaults:
-
-- `ckanext.dimred.tsne.perplexity` (default: `30`)
-- `ckanext.dimred.tsne.n_components` (default: `2`)
-- `ckanext.dimred.tsne.max_rows` (default: `2000`)
-
-PCA defaults:
-
-- `ckanext.dimred.pca.n_components` (default: `2`)
-- `ckanext.dimred.pca.whiten` (default: `false`)
-- `ckanext.dimred.pca.max_rows` (default: `50000`)
-
-For every preview, dimred uses the lower of `ckanext.dimred.max_rows` and the
-selected method's `*.max_rows`. DataStore receives that limit through CKAN's
-`datastore_search`; CSV and TSV file resources use deterministic reservoir
-sampling while being read in chunks.
-
-The limits are compute budgets, not a promise that every deployment has the
-same projection time. Re-measure them after changing CKAN, Python, projection
-libraries, CPU allocation, or representative feature counts. The repository
-contains deterministic manual workloads; the current [versioned baseline](docs/benchmarks/workload-budgets.md)
-records the measured environment and limits. They are excluded from normal tests:
+Activate the CKAN virtual environment and install the extension:
 
 ```bash
-pytest -m benchmark -s -q ckanext/dimred/tests/benchmarks
-DIMRED_BENCHMARK_PROFILE=umap-limit pytest -m benchmark -s -q ckanext/dimred/tests/benchmarks
-DIMRED_BENCHMARK_PROFILE=full pytest -m benchmark -s -q ckanext/dimred/tests/benchmarks
+git clone https://github.com/DataShades/ckanext-dimred.git
+cd ckanext-dimred
+pip install .
 ```
 
-`smoke` is the default profile. The `*-limit` profiles measure the configured
-PCA/UMAP/t-SNE row budgets separately; `full` adds intermediate row and feature
-counts. Each case runs in a forked CKAN process, so its peak RSS is isolated;
-the emitted JSON includes the environment versions and compact numeric-preview
-payload size.
+Enable the plugin in the final applicable CKAN configuration layer:
 
-The compact JSON result payload is checked before it is stored in Redis/RQ or
-rendered into the interactive preview; the Redis cache uses the same compact
-serialization. With the default three-decimal coordinates, source row IDs, and
-a 30-value categorical color column, a representative 50,000-row payload
-measures 1.66 MiB in 2D and 1.98 MiB in 3D; the 8 MiB default leaves headroom
-for real column names and values while rejecting unexpectedly large browser
-responses. Wide datasets keep only the first 100 eligible color candidates,
-with the selected color column retained first.
-
-Example:
-
-```
+```ini
 ckan.plugins = ... dimred
-
-ckanext.dimred.allowed_methods = umap
-ckanext.dimred.max_rows = 10000
-ckanext.dimred.umap.max_rows = 10000
-ckanext.dimred.enable_categorical = true
 ```
 
-## Developer installation
+Run a CKAN worker for uncached previews:
 
-To install ckanext-dimred for development, activate your CKAN virtualenv and
-do:
+```bash
+ckan -c /path/to/ckan.ini jobs worker dimred
+```
 
-    git clone https://github.com/DataShades/ckanext-dimred.git
-    cd ckanext-dimred
-    pip install -e '.[dev]'
+## Development
 
-## Tests
+```bash
+pip install -e '.[dev]'
+pytest --ckan-ini=test_config/test.ini
+```
 
-To run the tests, do:
+Run the local static checks after installing JavaScript dependencies:
 
-    pytest --ckan-ini=test_config/test.ini
+```bash
+npm ci
+ruff check ckanext/dimred
+python scripts/typecheck.py
+npm run lint:js
+```
 
-Browser tests also need the Chromium binary (once per environment):
+Browser tests additionally require Chromium and three terminals:
 
-    playwright install --with-deps chromium
+```bash
+playwright install --with-deps chromium
+```
 
-Start a CKAN development server in a separate terminal:
+In the first terminal, start CKAN:
 
-    ckan -c test_config/test.ini run -t
+```bash
+ckan -c test_config/test.ini run -t
+```
 
-Start the CKAN worker for DimRed previews in another terminal:
+In the second terminal, start the DimRed worker:
 
-    ckan -c test_config/test.ini jobs worker dimred
+```bash
+ckan -c test_config/test.ini jobs worker dimred
+```
 
-Then run the Playwright suite:
+In the third terminal, run Playwright:
 
-    pytest --ckan-ini=test_config/test.ini -m playwright --browser chromium --base-url=http://127.0.0.1:5000 ckanext/dimred/tests/e2e
+```bash
+pytest --ckan-ini=test_config/test.ini -m playwright --browser chromium \
+  --base-url=http://127.0.0.1:5000 ckanext/dimred/tests/e2e
+```
 
-## Background previews
+Build the documentation locally:
 
-DimRed queues uncached embeddings on CKAN's `dimred` RQ queue, so PCA, t-SNE,
-and UMAP do not run in the web request. The worker command above must run in
-each deployment. It uses CKAN's configured Redis connection and
-`ckan.jobs.timeout`; no separate DimRed worker service or timeout setting is
-required. Completed upload-based previews use the DimRed cache; other results
-remain available through CKAN RQ for a bounded time.
-
-## Static checks
-
-Install the JavaScript lint dependencies once after `pip install -e '.[dev]'`:
-
-    npm ci
-
-Then run the same static checks as CI:
-
-    ruff check ckanext/dimred
-    python scripts/typecheck.py
-    npm run lint:js
+```bash
+pip install -e '.[docs]'
+mkdocs build --strict
+```
 
 ## License
 
-[AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html)
+[AGPL-3.0-or-later](LICENSE)
