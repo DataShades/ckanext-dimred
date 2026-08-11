@@ -646,14 +646,17 @@ def test_color_candidate_limit_keeps_selected_column_first(package, create_with_
 @pytest.mark.usefixtures("with_plugins")
 @pytest.mark.ckan_config("ckanext.dimred.max_preview_payload_mb", "1")
 def test_preview_payload_budget_accepts_exact_limit_and_rejects_one_extra_byte():
-    result = {"embedding": [[0.0, 0.0]], "meta": {"padding": ""}}
+    result = {
+        "embedding": [[0.0, 0.0]],
+        "meta": {"prepare_info": {"display_fields": [{"name": "record", "values": [""]}]}},
+    }
     limit = dimred_action.dimred_config.max_preview_payload_bytes()
     baseline_size = len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-    result["meta"]["padding"] = "x" * (limit - baseline_size)
+    result["meta"]["prepare_info"]["display_fields"][0]["values"][0] = "x" * (limit - baseline_size)
 
     dimred_action._validate_preview_payload_size(result)
 
-    result["meta"]["padding"] += "x"
+    result["meta"]["prepare_info"]["display_fields"][0]["values"][0] += "x"
     with pytest.raises(DimredPreviewPayloadError):
         dimred_action._validate_preview_payload_size(result)
 
@@ -794,9 +797,12 @@ def test_dimred_export_embedding(package, create_with_upload):
 @pytest.mark.ckan_config("ckanext.dimred.max_rows", 4)
 @pytest.mark.ckan_config("ckanext.dimred.pca.max_rows", 2)
 def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(package, create_with_upload):
-    csv_content = b"x,y,label\n1,11,row-1\n2,12,row-2\n3,13,row-3\n4,14,row-4\n"
+    csv_content = (
+        b"x,y,label,record\n1,11,row-1,=record-1\n2,12,row-2,=record-2\n"
+        b"3,13,row-3,=record-3\n4,14,row-4,=record-4\n"
+    )
     resource = create_with_upload(csv_content, "rows.csv", format="csv", package_id=package["id"])
-    view = _create_dimred_view(resource["id"], method="pca", color_by="label")
+    view = _create_dimred_view(resource["id"], method="pca", color_by="label", display_fields=["label", "record"])
 
     result = _build_dimred_preview(resource["id"], view["id"])
     prepare_info = result["meta"]["prepare_info"]
@@ -808,12 +814,64 @@ def test_dimred_preview_preserves_file_row_ids_through_sampling_and_export(packa
         (2, "row-2"),
         (4, "row-4"),
     }
+    assert prepare_info["display_fields"] == [
+        {
+            "name": "label",
+            "values": [f"row-{row_id}" for row_id in prepare_info["source_row_ids"]],
+        },
+        {
+            "name": "record",
+            "values": [f"=record-{row_id}" for row_id in prepare_info["source_row_ids"]],
+        },
+    ]
 
     export = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
     rows = list(csv.reader(io.StringIO(export["content"])))
 
-    assert rows[0] == ["x", "y", "source_row_id", "label"]
-    assert {(int(row[2]), row[3]) for row in rows[1:]} == {(2, "row-2"), (4, "row-4")}
+    assert rows[0] == ["x", "y", "source_row_id", "label", "record"]
+    assert {(int(row[2]), row[3], row[4]) for row in rows[1:]} == {
+        (2, "row-2", "'=record-2"),
+        (4, "row-4", "'=record-4"),
+    }
+
+
+@pytest.mark.usefixtures("clean_db", "with_plugins")
+def test_dimred_preview_rejects_unknown_display_column(package, create_with_upload):
+    resource = create_with_upload(b"x,y\n1,2\n3,4\n", "rows.csv", format="csv", package_id=package["id"])
+    view = _create_dimred_view(resource["id"], method="pca", display_fields=["missing"])
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        _build_dimred_preview(resource["id"], view["id"])
+
+    assert excinfo.value.error_dict["display_fields"] == ["Unknown display column(s): missing."]
+
+
+@pytest.mark.usefixtures("clean_db", "clean_datastore", "with_plugins")
+@pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
+def test_dimred_preview_rejects_non_scalar_datastore_display_values(package, create_with_upload):
+    resource = create_with_upload(b"x,y,tags\n", "rows.csv", format="csv", package_id=package["id"])
+    call_action(
+        "datastore_create",
+        {},
+        resource_id=resource["id"],
+        force=True,
+        fields=[
+            {"id": "x", "type": "numeric"},
+            {"id": "y", "type": "numeric"},
+            {"id": "tags", "type": "text[]"},
+        ],
+        records=[
+            {"x": 1, "y": 11, "tags": ["first", "second"]},
+            {"x": 2, "y": 12, "tags": ["third"]},
+            {"x": 3, "y": 13, "tags": ["fourth"]},
+        ],
+    )
+    view = _create_dimred_view(resource["id"], method="pca", display_fields=["tags"])
+
+    with pytest.raises(tk.ValidationError) as excinfo:
+        _build_dimred_preview(resource["id"], view["id"])
+
+    assert excinfo.value.error_dict["display_fields"] == ["Display column 'tags' contains non-scalar values."]
 
 
 @pytest.mark.usefixtures("clean_db", "with_plugins")
@@ -839,19 +897,19 @@ def test_dimred_color_values_are_aligned_with_sampled_file_rows(package, create_
 @pytest.mark.usefixtures("clean_datastore", "clean_redis", "with_plugins", "with_test_worker")
 @pytest.mark.ckan_config("ckan.plugins", "datastore dimred")
 def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_upload):
-    resource = create_with_upload(b"x,y,label\n", "rows.csv", format="csv", package_id=package["id"])
+    resource = create_with_upload(b"x,y,label,record\n", "rows.csv", format="csv", package_id=package["id"])
     call_action(
         "datastore_create",
         {},
         resource_id=resource["id"],
         force=True,
         records=[
-            {"x": 1, "y": 11, "label": "row-1"},
-            {"x": 2, "y": 12, "label": "row-2"},
-            {"x": 3, "y": 13, "label": "row-3"},
+            {"x": 1, "y": 11, "label": "row-1", "record": "first"},
+            {"x": 2, "y": 12, "label": "row-2", "record": "second"},
+            {"x": 3, "y": 13, "label": "row-3", "record": "third"},
         ],
     )
-    view = _create_dimred_view(resource["id"], method="pca", color_by="label")
+    view = _create_dimred_view(resource["id"], method="pca", color_by="label", display_fields=["record"])
 
     started = tk.get_action("dimred_start_preview")({}, {"id": resource["id"], "view_id": view["id"]})
     _run_dimred_worker()
@@ -863,12 +921,17 @@ def test_dimred_preview_uses_datastore_ids_and_export(package, create_with_uploa
 
     assert prepare_info["source_row_ids"] == [1, 2, 3]
     assert prepare_info["color_values"] == ["row-1", "row-2", "row-3"]
+    assert prepare_info["display_fields"] == [{"name": "record", "values": ["first", "second", "third"]}]
 
     export = call_action("dimred_export_embedding", id=resource["id"], view_id=view["id"])
     rows = list(csv.reader(io.StringIO(export["content"])))
 
-    assert rows[0] == ["x", "y", "source_row_id", "label"]
-    assert [row[2:] for row in rows[1:]] == [["1", "row-1"], ["2", "row-2"], ["3", "row-3"]]
+    assert rows[0] == ["x", "y", "source_row_id", "label", "record"]
+    assert [row[2:] for row in rows[1:]] == [
+        ["1", "row-1", "first"],
+        ["2", "row-2", "second"],
+        ["3", "row-3", "third"],
+    ]
 
     colors = call_action("dimred_get_dimred_color_values", id=resource["id"], view_id=view["id"], column="label")
 

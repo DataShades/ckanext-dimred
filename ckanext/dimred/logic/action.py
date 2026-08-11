@@ -426,6 +426,7 @@ def _cache_settings(resource: dict[str, Any], resource_view: dict[str, Any]) -> 
         "method_params": effective_params,
         "feature_columns": resource_view.get("feature_columns"),
         "color_by": resource_view.get("color_by"),
+        "display_fields": resource_view.get("display_fields"),
         "effective_max_rows": dimred_config.effective_max_rows(method_name),
         "enable_categorical": dimred_config.enable_categorical(),
         "max_categories_for_ohe": dimred_config.max_categories_for_ohe(),
@@ -628,6 +629,7 @@ def _prepare_matrix_from_resource(
     df, source_row_ids = _maybe_limit_rows(df, source_row_ids, row_limit)
 
     color_by, color_values, color_kind = _extract_color_info(df, resource_view)
+    display_fields = _extract_display_fields(df, resource_view)
     selected_features = _extract_selected_features(df, resource_view)
 
     numeric_cols, categorical_cols, skipped_columns = _select_feature_columns(df, color_by, selected_features)
@@ -658,6 +660,7 @@ def _prepare_matrix_from_resource(
         "color_by": color_by or None,
         "color_kind": color_kind,
         "color_values": color_values,
+        "display_fields": display_fields,
         "feature_columns": numeric_cols + categorical_cols,
         "skipped_columns": skipped_columns,
         "color_candidates": color_candidates,
@@ -787,6 +790,37 @@ def _extract_selected_features(df: pd.DataFrame, resource_view: dict[str, Any]) 
     if unknown:
         raise tk.ValidationError({"feature_columns": [f"Unknown feature column(s): {', '.join(unknown)}."]})
     return selected
+
+
+def _extract_display_fields(
+    df: pd.DataFrame,
+    resource_view: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return selected display columns and values aligned with the prepared rows."""
+    selected = _parse_column_list(resource_view.get("display_fields"))
+    unknown = sorted(set(selected).difference(df.columns))
+    if unknown:
+        raise tk.ValidationError({"display_fields": [f"Unknown display column(s): {', '.join(unknown)}."]})
+
+    return [
+        {"name": column, "values": _serialize_display_values(cast(pd.Series, df[column]))}
+        for column in selected
+    ]
+
+
+def _parse_column_list(value: Any) -> list[str]:
+    """Read a resource-view column list defensively for old and direct action input."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            value = parsed if isinstance(parsed, list) else value.split(",")
+        except json.JSONDecodeError:
+            value = value.split(",")
+    if not isinstance(value, list | tuple | set):
+        return []
+    return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
 
 
 def _select_feature_columns(
@@ -1018,6 +1052,24 @@ def _serialize_color_values(series: pd.Series, kind: str) -> list[Any]:
         return _serialize_numeric_values(series)
 
     return [None if pd.isna(raw) else str(raw) for raw in series.tolist()]
+
+
+def _serialize_display_values(series: pd.Series) -> list[Any]:
+    """Serialize contextual values as JSON-safe text without changing row order."""
+    values: list[Any] = []
+    for raw in series.tolist():
+        if raw is None or raw is pd.NA:
+            values.append(None)
+            continue
+        if not pd.api.types.is_scalar(raw):
+            raise tk.ValidationError(
+                {"display_fields": [f"Display column '{series.name}' contains non-scalar values."]}
+            )
+        if pd.isna(raw):
+            values.append(None)
+            continue
+        values.append(str(raw))
+    return values
 
 
 def _categorical_unique_values(series: pd.Series, unique_limit: int) -> list[str]:

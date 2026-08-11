@@ -22,8 +22,49 @@
 {% if selected_features is string %}
     {% set selected_features = selected_features.split(',') %}
 {% endif %}
+{% set selected_display_fields = data.get('display_fields', resource_view.display_fields) if resource_view else data.get('display_fields') %}
+{% if selected_display_fields is string %}
+    {% set selected_display_fields = selected_display_fields.split(',') %}
+{% endif %}
+{% if not selected_display_fields %}
+    {% set selected_display_fields = [] %}
+{% endif %}
 {% if not selected_features %}
     {% set selected_features = [] %}
+{% endif %}
+
+{% if feature_option_groups %}
+    <div class="form-group control-group">
+        <label class="form-label" for="field-display-fields">{{ _('Tooltip fields') }}</label>
+        <div class="controls">
+            <span class="info-block">{{ _('Selected values are shown in the interactive tooltip and CSV export.') }}</span>
+            <select
+                    class="form-control"
+                    data-module="autocomplete"
+                    id="field-display-fields"
+                    multiple="multiple"
+                    name="display_fields"
+            >
+                {% for group in feature_option_groups %}
+                    <optgroup label="{{ group.label }}">
+                        {% for opt in group.options %}
+                            <option value="{{ opt.value }}"{% if opt.value in selected_display_fields %} selected{% endif %}>{{ opt.text }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
+            {% set display_fields_errors = errors.get('display_fields') if errors else [] %}
+            {% if display_fields_errors %}
+                <strong class="error-inline">
+                    {% if display_fields_errors is string %}
+                        {{ display_fields_errors }}
+                    {% else %}
+                        {{ display_fields_errors|join(', ') }}
+                    {% endif %}
+                </strong>
+            {% endif %}
+        </div>
+    </div>
 {% endif %}
 
 <div class="form-group control-group">

@@ -14,6 +14,7 @@ from ckan.tests.helpers import call_action
 
 COLOR_ACTION = "dimred_get_dimred_color_values"
 XSS_LABEL = '<img src=x onerror=window.__dimredXss=1>'
+XSS_DISPLAY = '<svg onload=window.__dimredXss=1>'
 FORM_MODULE_SOURCE = (Path(__file__).resolve().parents[2] / "assets/js/dimred-view-form.js").read_text()
 
 
@@ -21,11 +22,11 @@ def _create_public_dimred_view(package):
     upload = FileStorage(
         stream=BytesIO(
             (
-                "x,y,score,label\n"
-                f"1,10,10,{XSS_LABEL}\n"
-                "2,20,20,second\n"
-                "3,30,30,third\n"
-                "4,40,,fourth\n"
+                "x,y,score,label,record\n"
+                f"1,10,10,{XSS_LABEL},{XSS_DISPLAY}\n"
+                "2,20,20,second,second-record\n"
+                "3,30,30,third,third-record\n"
+                "4,40,,fourth,fourth-record\n"
             ).encode()
         ),
         filename="colors.csv",
@@ -47,6 +48,7 @@ def _create_public_dimred_view(package):
         n_components=2,
         feature_columns=["x", "y", "score"],
         color_by="label",
+        display_fields=["record", "label"],
     )
     return resource, view
 
@@ -72,6 +74,7 @@ def _chart_state(page):
             const data = option.series[0].data;
             return {
                 colorValues: data.map(point => point.__colorValue),
+                displayValues: data.map(point => point.__displayValues),
                 itemColors: data.map(point => (point.itemStyle && point.itemStyle.color) || null),
                 visualMap: option.visualMap,
                 progressive: option.series[0].progressive,
@@ -118,11 +121,21 @@ def test_color_selector_lazy_loads_and_caches_values(page, base_url, package):
 
     initial_state = _chart_state(page)
     assert initial_state["colorValues"] == [XSS_LABEL, "second", "third", "fourth"]
+    assert initial_state["displayValues"] == [
+        {"record": XSS_DISPLAY, "label": XSS_LABEL},
+        {"record": "second-record", "label": "second"},
+        {"record": "third-record", "label": "third"},
+        {"record": "fourth-record", "label": "fourth"},
+    ]
     assert initial_state["progressive"] == 500
     assert initial_state["progressiveThreshold"] == 5000
     assert initial_state["animationThreshold"] == 2000
     assert color_requests == []
-    assert XSS_LABEL in _tooltip_text(page)
+    tooltip = _tooltip_text(page)
+    assert "Source row: 1" in tooltip
+    assert XSS_LABEL in tooltip
+    assert XSS_DISPLAY in tooltip
+    assert tooltip.count("label: " + XSS_LABEL) == 1
     assert page.evaluate("window.__dimredXss") == 0
     legend = page.locator("#dimred-color-legend")
     expect(legend).to_contain_text("Legend: label")
@@ -147,6 +160,9 @@ def test_color_selector_lazy_loads_and_caches_values(page, base_url, package):
     assert numeric_state["visualMap"][0]["text"] == ["score", ""]
     expect(legend).to_be_hidden()
     assert len(color_requests) == 1
+    tooltip = _tooltip_text(page)
+    assert tooltip.count("label: " + XSS_LABEL) == 1
+    assert tooltip.count("record: " + XSS_DISPLAY) == 1
 
     selector.select_option("")
     selector.select_option("score")

@@ -58,6 +58,31 @@ def dimred_feature_columns_list(value: Any, context: Context) -> list[str] | str
     return parsed
 
 
+def dimred_display_fields_list(value: Any, context: Context) -> list[str] | str | None:
+    """Validate/normalize display_fields to an ordered, unique list of column names."""
+    if value in (None, ""):
+        return value
+
+    parsed: list[str] | None = None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            loaded = json.loads(text)
+            if isinstance(loaded, list):
+                parsed = [str(item).strip() for item in loaded]
+        except json.JSONDecodeError:
+            parsed = [item.strip() for item in text.split(",")]
+    elif isinstance(value, list | tuple | set):
+        parsed = [str(item).strip() for item in value]
+
+    if parsed is None:
+        raise tk.Invalid(tk._("display_fields must be a list or comma-separated string."))
+
+    return list(dict.fromkeys(item for item in parsed if item))
+
+
 def dimred_method_params_object(value: Any, context: Context) -> dict[str, Any] | str | None:
     """Validate that method_params is a JSON object or dict."""
     if value in (None, ""):

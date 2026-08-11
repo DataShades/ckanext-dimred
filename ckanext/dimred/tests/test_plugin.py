@@ -91,6 +91,8 @@ def test_form_renders_autocomplete_feature_multi_select(app):
     assert 'data-module="autocomplete"' in response
     assert 'id="dimred-select-all-features"' in response
     assert 'id="dimred-clear-features"' in response
+    assert 'id="field-display-fields"' in response
+    assert 'name="display_fields"' in response
     assert '<option value="x">x</option>' in response
     assert '<option value="y">y</option>' in response
     assert '<option value="label">label</option>' in response
@@ -170,6 +172,7 @@ def test_form_submission_persists_native_feature_multi_select(app):
             "method": "pca",
             "feature_columns": ["x", "y"],
             "color_by": "label",
+            "display_fields": ["label", "x"],
         },
     )
     view = call_action("resource_view_list", id=resource["id"])[0]
@@ -182,9 +185,11 @@ def test_form_submission_persists_native_feature_multi_select(app):
     response = app.get(edit_view_url, headers={"Authorization": user["token"]})
 
     assert view["feature_columns"] == ["x", "y"]
+    assert view["display_fields"] == ["label", "x"]
     assert '<option value="x" selected>x</option>' in response
     assert '<option value="y" selected>y</option>' in response
     assert '<option value="label">label</option>' in response
+    assert '<option value="label" selected>label</option>' in response
 
 
 @pytest.mark.usefixtures("with_plugins")

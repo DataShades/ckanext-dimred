@@ -35,8 +35,8 @@ can color points by a chosen column and control which columns are used as featur
 
 1. Add a tabular resource (csv/tsv/xls/xlsx).
 2. Create a new resource view of type `dimred_view`.
-3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, and select feature
-   columns.
+3. (Optional) Choose method (`UMAP`/`t-SNE`/`PCA`), pick `Color by column`, select feature
+   columns, and choose contextual `Tooltip fields`.
 4. (Optional) Adjust the controls shown for the selected method. Leave a value empty
    to use its configured default; use **Reset method defaults** to restore them.
    `n_components` controls 2D/3D output.
@@ -56,6 +56,14 @@ select it explicitly in the searchable Feature columns multi-select after choosi
 automatic` removes the explicit selection and uses eligible columns automatically. Categorical
 feature columns must be enabled and stay within the configured category limit; otherwise the
 preview returns a `feature_columns` validation error.
+
+### Tooltip fields and CSV context
+
+`Tooltip fields` are contextual columns only: they do not become projection features and do not
+affect point colours. Their sampled values are shown in the interactive ECharts tooltip and included
+in the CSV export after `source_row_id` and the selected color column. A field already used for the
+current colour is included once, as the color column. Matplotlib is a static image, so its contextual
+row values remain available through the CSV export.
 
 ### Reading a preview
 

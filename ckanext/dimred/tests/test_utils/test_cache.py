@@ -53,7 +53,7 @@ def _upload_resource(**overrides):
 
 @pytest.mark.usefixtures("with_plugins")
 def test_cache_settings_include_pipeline_schema_version():
-    settings = dimred_action._cache_settings(_upload_resource(), {"method": "umap"})
+    settings = dimred_action._cache_settings(_upload_resource(), {"method": "umap", "display_fields": ["record"]})
 
     assert settings["pipeline_schema_version"] == 2
     assert settings["method_params"]["n_neighbors"] == 15
@@ -61,6 +61,7 @@ def test_cache_settings_include_pipeline_schema_version():
     assert settings["embedding_decimals"] == dimred_config.embedding_decimals()
     assert settings["max_preview_payload_bytes"] == dimred_config.max_preview_payload_bytes()
     assert settings["max_color_candidates"] == dimred_config.max_color_candidates()
+    assert settings["display_fields"] == ["record"]
 
 
 @pytest.mark.usefixtures("with_plugins")

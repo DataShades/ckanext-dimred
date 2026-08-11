@@ -37,6 +37,29 @@ def test_embedding_to_csv_with_source_row_ids():
     assert rows == [["x", "y", "source_row_id", "label"], ["1", "2", "4", "a"], ["3", "4", "9", "b"]]
 
 
+def test_embedding_to_csv_includes_display_fields_after_color_without_duplicates():
+    meta = {
+        "prepare_info": {
+            "source_row_ids": [4, 9],
+            "color_by": "label",
+            "color_values": ["a", "b"],
+            "display_fields": [
+                {"name": "label", "values": ["a", "b"]},
+                {"name": "record", "values": ["=first", "second"]},
+                {"name": "country", "values": ["UA", "PL"]},
+            ],
+        }
+    }
+
+    rows = list(csv.reader(io.StringIO(embedding_to_csv([[1, 2], [3, 4]], meta))))
+
+    assert rows == [
+        ["x", "y", "source_row_id", "label", "record", "country"],
+        ["1", "2", "4", "a", "'=first", "UA"],
+        ["3", "4", "9", "b", "second", "PL"],
+    ]
+
+
 @pytest.mark.parametrize("value", ["=SUM(A1:A2)", "+cmd", "-formula", "@formula", " \t=SUM(A1:A2)"])
 def test_embedding_to_csv_neutralizes_formula_like_color_values(value):
     csv_text = embedding_to_csv([[1.0, 2.0]], {"prepare_info": {"color_by": "label", "color_values": [value]}})

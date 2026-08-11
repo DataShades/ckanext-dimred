@@ -43,6 +43,12 @@ this.ckan.module("dimred-view-echarts", function ($) {
             var legacyColorValues = prepareInfo.color_values || [];
             var sourceRowIdsRaw = prepareInfo.source_row_ids;
             var sourceRowIds = Array.isArray(sourceRowIdsRaw) ? sourceRowIdsRaw : [];
+            var displayFieldsRaw = prepareInfo.display_fields;
+            var displayFields = Array.isArray(displayFieldsRaw)
+                ? displayFieldsRaw.filter(function (field) {
+                      return field && field.name && Array.isArray(field.values) && field.values.length === embedding.length;
+                  })
+                : [];
 
             var palette = [
                 "#5470c6",
@@ -98,6 +104,12 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 if (sourceRowId !== undefined && sourceRowId !== null) {
                     lines.push("Source row: " + sourceRowId);
                 }
+                var displayValues = (params.data && params.data.__displayValues) || {};
+                $.each(displayFields, function (_, field) {
+                    if (field.name !== colorState.name && displayValues[field.name] !== undefined && displayValues[field.name] !== null) {
+                        lines.push(field.name + ": " + displayValues[field.name]);
+                    }
+                });
                 var colorVal = params.data ? params.data.__colorValue : null;
                 if (colorState.name && colorVal !== undefined && colorVal !== null && colorVal !== "") {
                     lines.push(colorState.name + ": " + colorVal);
@@ -105,12 +117,25 @@ this.ckan.module("dimred-view-echarts", function ($) {
                 return lines.join("\n");
             };
 
+            var displayValuesForIndex = function (idx) {
+                var values = {};
+                $.each(displayFields, function (_, field) {
+                    values[field.name] = field.values[idx];
+                });
+                return values;
+            };
+
             var baseSeries = {
                 type: is3D ? "scatter3D" : "scatter",
                 symbolSize: 6,
                 data: $.map(baseCoords, function (coords, idx) {
                     var c = (coords || []).slice(0);
-                    return { value: c, __coords: c, __sourceRowId: sourceRowIds[idx] };
+                    return {
+                        value: c,
+                        __coords: c,
+                        __sourceRowId: sourceRowIds[idx],
+                        __displayValues: displayValuesForIndex(idx),
+                    };
                 }),
                 encode: is3D ? { x: 0, y: 1, z: 2 } : { x: 0, y: 1 },
             };
@@ -221,6 +246,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             value: c,
                             __coords: c,
                             __sourceRowId: sourceRowIds[idx],
+                            __displayValues: displayValuesForIndex(idx),
                             __colorValue: null,
                             itemStyle: { color: baseColor },
                         };
@@ -265,6 +291,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             value: c,
                             __coords: c,
                             __sourceRowId: sourceRowIds[idx],
+                            __displayValues: displayValuesForIndex(idx),
                             __colorValue: label,
                             itemStyle: { color: itemColor || missingColor },
                         });
@@ -316,6 +343,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             value: valueWithColor,
                             __coords: c,
                             __sourceRowId: sourceRowIds[idx],
+                            __displayValues: displayValuesForIndex(idx),
                             __colorValue: numericVal,
                         };
                         if (numericVal === null) {
@@ -480,6 +508,7 @@ this.ckan.module("dimred-view-echarts", function ($) {
                             value: c,
                             __coords: c,
                             __sourceRowId: sourceRowIds[idx],
+                            __displayValues: displayValuesForIndex(idx),
                             __colorValue: label,
                             itemStyle: { color: color },
                         });

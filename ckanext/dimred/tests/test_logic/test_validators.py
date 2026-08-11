@@ -41,6 +41,22 @@ def test_feature_columns_list_invalid_type():
 
 
 @pytest.mark.usefixtures("with_plugins")
+def test_display_fields_list_normalizes_native_form_values():
+    validator = tk.get_validator("dimred_display_fields_list")
+
+    assert validator('[" label ", "record", "label", ""]', {}) == ["label", "record"]
+    assert validator(["record", "label", "record"], {}) == ["record", "label"]
+
+
+@pytest.mark.usefixtures("with_plugins")
+def test_display_fields_list_rejects_invalid_type():
+    validator = tk.get_validator("dimred_display_fields_list")
+
+    with pytest.raises(tk.Invalid):
+        validator(123, {})
+
+
+@pytest.mark.usefixtures("with_plugins")
 def test_method_params_object_accepts_dict_and_json():
     validator = tk.get_validator("dimred_method_params_object")
 
