@@ -7,6 +7,8 @@ data. It supports PCA, t-SNE, and UMAP; interactive ECharts and static
 Matplotlib rendering; configurable feature, colour, and tooltip fields; CSV
 export; Redis caching; and CKAN RQ background jobs.
 
+![Tabular CKAN resource transformed into an interactive dimensionality-reduction preview](https://raw.githubusercontent.com/DataShades/ckanext-dimred/master/docs/assets/images/dimred-overview.png)
+
 Read the documentation in this repository:
 
 - [Installation and compatibility](https://github.com/DataShades/ckanext-dimred/blob/master/docs/installation.md)
