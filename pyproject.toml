@@ -132,6 +132,7 @@ self = ["ckanext.dimred"]
 [tool.pytest.ini_options]
 addopts = "--ckan-ini test_config/test.ini -m 'not benchmark and not playwright'"
 markers = [
+    "benchmark: reproducible projection workload measurements run outside the default suite",
     "playwright: browser tests that require a running CKAN server",
 ]
 filterwarnings = [

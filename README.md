@@ -197,6 +197,24 @@ selected method's `*.max_rows`. DataStore receives that limit through CKAN's
 `datastore_search`; CSV and TSV file resources use deterministic reservoir
 sampling while being read in chunks.
 
+The limits are compute budgets, not a promise that every deployment has the
+same projection time. Re-measure them after changing CKAN, Python, projection
+libraries, CPU allocation, or representative feature counts. The repository
+contains deterministic manual workloads; the current [versioned baseline](docs/benchmarks/workload-budgets.md)
+records the measured environment and limits. They are excluded from normal tests:
+
+```bash
+pytest -m benchmark -s -q ckanext/dimred/tests/benchmarks
+DIMRED_BENCHMARK_PROFILE=umap-limit pytest -m benchmark -s -q ckanext/dimred/tests/benchmarks
+DIMRED_BENCHMARK_PROFILE=full pytest -m benchmark -s -q ckanext/dimred/tests/benchmarks
+```
+
+`smoke` is the default profile. The `*-limit` profiles measure the configured
+PCA/UMAP/t-SNE row budgets separately; `full` adds intermediate row and feature
+counts. Each case runs in a forked CKAN process, so its peak RSS is isolated;
+the emitted JSON includes the environment versions and compact numeric-preview
+payload size.
+
 The compact JSON result payload is checked before it is stored in Redis/RQ or
 rendered into the interactive preview; the Redis cache uses the same compact
 serialization. With the default three-decimal coordinates, source row IDs, and

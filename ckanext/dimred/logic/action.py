@@ -638,14 +638,7 @@ def _prepare_matrix_from_resource(
     all_color_candidates = _build_color_candidates(df, color_by, numeric_cols, categorical_cols)
     color_candidates, omitted_color_candidates = _limit_color_candidates(all_color_candidates)
 
-    df_features = _build_feature_frame(df, numeric_cols, categorical_cols)
-
-    try:
-        x_matrix = StandardScaler().fit_transform(df_features.values)
-    except (TypeError, ValueError) as err:
-        raise tk.ValidationError({"data": [f"Cannot prepare feature data: {err}"]}) from err
-    if not np.isfinite(x_matrix).all():
-        raise tk.ValidationError({"data": ["Feature data must contain only finite values."]})
+    x_matrix = _prepare_feature_matrix(df, numeric_cols, categorical_cols)
 
     info: dict[str, Any] = {
         "n_rows_original": n_rows_original,
@@ -669,6 +662,23 @@ def _prepare_matrix_from_resource(
     }
 
     return x_matrix, info
+
+
+def _prepare_feature_matrix(
+    df: pd.DataFrame,
+    numeric_cols: list[str],
+    categorical_cols: list[str],
+) -> np.ndarray:
+    """Build and scale the feature matrix used by every DimRed projection."""
+    df_features = _build_feature_frame(df, numeric_cols, categorical_cols)
+
+    try:
+        x_matrix = StandardScaler().fit_transform(df_features.values)
+    except (TypeError, ValueError) as err:
+        raise tk.ValidationError({"data": [f"Cannot prepare feature data: {err}"]}) from err
+    if not np.isfinite(x_matrix).all():
+        raise tk.ValidationError({"data": ["Feature data must contain only finite values."]})
+    return x_matrix
 
 
 def _load_dataframe(
