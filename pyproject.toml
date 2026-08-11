@@ -43,6 +43,7 @@ Homepage = "https://github.com/DataShades/ckanext-dimred"
 dev = [
     "basedpyright>=1.19",
     "build>=1.2",
+    "git-cliff>=2.13,<3",
     "packaging>=24.2",
     "pytest-ckan",
     "pytest-playwright>=0.8",

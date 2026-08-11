@@ -1,0 +1,44 @@
+[changelog]
+header = """
+# Changelog
+
+All notable user-facing changes are generated from the Git history.
+"""
+body = """
+{% if version %}
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim }}
+    {% for commit in commits %}
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}{% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}
+"""
+trim = true
+render_always = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+filter_commits = true
+protect_breaking_commits = true
+commit_parsers = [
+    { field = "raw_message", pattern = "^[a-z]+(?:\\([^)]*\\))?!:", group = "<!-- 0 -->Breaking changes" },
+    { footer = "BREAKING CHANGE", group = "<!-- 0 -->Breaking changes" },
+    { message = "^Merge ", skip = true },
+    { message = "^(test|ci|chore)(\\(.+\\))?!", skip = true },
+    { message = "^fix: secure", group = "<!-- 2 -->Security" },
+    { message = "^(security|sec)(\\(.+\\))?!", group = "<!-- 2 -->Security" },
+    { message = "^feat", group = "<!-- 1 -->Features" },
+    { message = "^fix", group = "<!-- 3 -->Fixes" },
+    { message = "^perf", group = "<!-- 4 -->Performance" },
+    { message = "^docs?", group = "<!-- 5 -->Documentation" },
+    { message = "^build", group = "<!-- 6 -->Build" },
+    { message = "^refactor", group = "<!-- 7 -->Refactoring" },
+    { message = "^revert", group = "<!-- 8 -->Reverts" },
+    { message = ".*", skip = true },
+]
+sort_commits = "newest"

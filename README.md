@@ -16,6 +16,7 @@ Read the documentation in this repository:
 - [Configuration](https://github.com/DataShades/ckanext-dimred/blob/master/docs/configuration.md)
 - [Operations and troubleshooting](https://github.com/DataShades/ckanext-dimred/blob/master/docs/operations.md)
 - [Workload budgets](https://github.com/DataShades/ckanext-dimred/blob/master/docs/benchmarks/workload-budgets.md)
+- [Changelog](https://github.com/DataShades/ckanext-dimred/blob/master/CHANGELOG.md)
 
 ## Install
 
@@ -85,6 +86,12 @@ Build the documentation locally:
 ```bash
 pip install -e '.[docs]'
 mkdocs build --strict
+```
+
+Regenerate the changelog after installing the development dependencies:
+
+```bash
+make changelog
 ```
 
 ## License
